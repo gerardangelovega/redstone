@@ -6,34 +6,72 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "redstone",
+    const server_source_files: []const []const u8 = &.{
+        "src/server/main.cpp",
+    };
+    const client_source_files: []const []const u8 = &.{
+        "src/client/main.cpp",
+    };
+    const shared_source_files: []const []const u8 = &.{
+        "src/shared/io.cpp",
+        "src/shared/error.cpp",
+    };
+    const flags: []const []const u8 = &.{
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Werror",
+        "-std=c++17"
+    };
+
+    const server_exe = b.addExecutable(.{
+        .name = "redstonedb_server",
         .root_module = b.createModule(.{
             .root_source_file = null,
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-            .link_libcpp = true,
+            .target           = target,
+            .optimize         = optimize,
+            .link_libc        = true,
+            .link_libcpp      = true,
         }),
     });
-
-    exe.root_module.addCSourceFiles(.{
-        .files = &.{
-            "src/main.cpp",
-        },
-        .flags = &.{
-            "-Wall",
-            "-Wextra",
-            "-Wpedantic",
-            "-Werror",
-            "-std=c++17"
-        }
+    server_exe.root_module.addCSourceFiles(.{
+        .files = server_source_files,
+        .flags = flags
     });
+    server_exe.root_module.addCSourceFiles(.{
+        .files = shared_source_files,
+        .flags = flags
+    });
+    server_exe.root_module.addIncludePath(b.path("include/"));
+    b.installArtifact(server_exe);
 
-    b.installArtifact(exe);
+    const client_exe = b.addExecutable(.{
+        .name = "redstonedb_client",
+        .root_module = b.createModule(.{
+            .root_source_file = null,
+            .target           = target,
+            .optimize         = optimize,
+            .link_libc        = true,
+            .link_libcpp      = true
+        })
+    });
+    client_exe.root_module.addCSourceFiles(.{
+        .files = client_source_files,
+        .flags = flags,
+    });
+    client_exe.root_module.addCSourceFiles(.{
+        .files = shared_source_files,
+        .flags = flags,
+    });
+    client_exe.root_module.addIncludePath(b.path("include/"));
+    b.installArtifact(client_exe);
+
 
     var targets: std.ArrayList(*std.Build.Step.Compile) = .empty;
-    targets.append(b.allocator, exe) catch {
+    targets.append(b.allocator, server_exe) catch {
+        std.debug.panic("Error: Ran out of memory while appending to targets array list\n", .{});
+    };
+    targets.append(b.allocator, client_exe) catch {
         std.debug.panic("Error: Ran out of memory while appending to targets array list\n", .{});
     };
 
@@ -42,9 +80,15 @@ pub fn build(b: *std.Build) !void {
     };
     _ = zcc.createStep(b, "cdb", targets_slice);
 
-    const run_exe = b.addRunArtifact(exe);
-    run_exe.step.dependOn(b.getInstallStep());
+    const run_server_exe = b.addRunArtifact(server_exe);
+    run_server_exe.step.dependOn(b.getInstallStep());
 
-    const run_step = b.step("run", "Run the application");
-    run_step.dependOn(&run_exe.step);
+    const run_server_step = b.step("run-server", "Run the server");
+    run_server_step.dependOn(&run_server_exe.step);
+
+    const run_client_exe = b.addRunArtifact(client_exe);
+    run_client_exe.step.dependOn(b.getInstallStep());
+
+    const run_client_step = b.step("run-client", "Run the client");
+    run_client_step.dependOn(&run_client_exe.step);
 }
