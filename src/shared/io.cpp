@@ -37,3 +37,7 @@ int32_t write_all(int fd, const char* buf, size_t n) {
     }
     return 0;
 }
+
+void fd_set_nb(int fd) {
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+}

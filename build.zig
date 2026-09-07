@@ -13,8 +13,9 @@ pub fn build(b: *std.Build) !void {
         "src/client/main.cpp",
     };
     const shared_source_files: []const []const u8 = &.{
-        "src/shared/io.cpp",
+        "src/shared/conn.cpp",
         "src/shared/error.cpp",
+        "src/shared/io.cpp",
     };
     const flags: []const []const u8 = &.{
         "-Wall",

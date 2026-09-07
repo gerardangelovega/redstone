@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <errno.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -5,39 +6,42 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/poll.h>
 #include <unistd.h>
+#include <vector>
 
+#include "shared/conn.h"
 #include "shared/io.h"
 #include "shared/error.h"
 
-static int32_t one_request(int connfd) {
-    char rbuf[4 + K_MAX_MSG];
-    errno = 0;
-    int32_t err = read_full(connfd, rbuf, 4);
-    if (err) {
-        msg(errno == 0 ? "EOF" : "read() error");
-        return err;
-    }
-    uint32_t len = 0;
-    memcpy(&len, rbuf, 4);
-    if (len > K_MAX_MSG) {
-        msg("too long");
-        return -1;
-    }
-    err = read_full(connfd, &rbuf[4], len);
-    if (err) {
-        msg("read() error");
-        return err;
-    }
-
-    printf("client says: %.*s\n", len, &rbuf[4]);
-    const char reply[] = "world";
-    char wbuf[4 + sizeof(reply)];
-    len = (uint32_t)strlen(reply);
-    memcpy(wbuf, &len, 4);
-    memcpy(&wbuf[4], reply, len);
-    return write_all(connfd, wbuf, 4 + len);
-}
+// static int32_t one_request(int connfd) {
+//     char rbuf[4 + K_MAX_MSG];
+//     errno = 0;
+//     int32_t err = read_full(connfd, rbuf, 4);
+//     if (err) {
+//         msg(errno == 0 ? "EOF" : "read() error");
+//         return err;
+//     }
+//     uint32_t len = 0;
+//     memcpy(&len, rbuf, 4);
+//     if (len > K_MAX_MSG) {
+//         msg("too long");
+//         return -1;
+//     }
+//     err = read_full(connfd, &rbuf[4], len);
+//     if (err) {
+//         msg("read() error");
+//         return err;
+//     }
+//
+//     printf("client says: %.*s\n", len, &rbuf[4]);
+//     const char reply[] = "world";
+//     char wbuf[4 + sizeof(reply)];
+//     len = (uint32_t)strlen(reply);
+//     memcpy(wbuf, &len, 4);
+//     memcpy(&wbuf[4], reply, len);
+//     return write_all(connfd, wbuf, 4 + len);
+// }
 
 int main () {
     /* Source: man socket.2
@@ -86,32 +90,110 @@ int main () {
         die("listen()");
     }
 
-    while (true) {
-        struct sockaddr_in client_addr = {};
-        socklen_t addrlen = sizeof(client_addr);
+    std::vector<Conn *> fd2conn;
+    std::vector<struct pollfd> poll_args;
 
-        /* Source: man accept.2
-         * accept() the first pending connection in the socket queue and returns a
-         *          file descriptor containing the address and port of both the 
-         *          server and the client
-         */
-        int connfd = accept(fd, (struct sockaddr*)&client_addr, &addrlen);
-        if (connfd < 0) {
-            continue;
+    fd_set_nb(fd); // set socket fd to non-blocking
+
+    while (true) {
+        poll_args.clear();
+
+        struct pollfd pfd = {fd, POLLIN, 0};
+        poll_args.push_back(pfd);
+
+        for (Conn* conn : fd2conn) {
+            if (!conn) {
+                continue;
+            }
+
+            /* Source: man poll.2
+             * POLLERR  flag to poll the OS for any errors that occurred
+             *          with the associated file descriptor
+             *
+             * POLLIN   flag to poll the OS whether or not there are bytes in the
+             *          the buffer to read
+             *
+             * POLLOUT  flag to poll the OS whether or not there is enough space in
+             *          the buffer without blocking
+             */
+            struct pollfd pfd = {conn->fd, POLLERR, 0};
+            if (conn->want_read) {
+                pfd.events = pfd.events | POLLIN;
+            }
+            if (conn->want_write) {
+                pfd.events = pfd.events | POLLOUT;
+            }
+            poll_args.push_back(pfd);
         }
 
-        while (true) {
-            int32_t err = one_request(connfd);
-            if (err) {
-                break;
+        /* Source: man poll.2
+         * poll()   polls multiple file descriptors for events they want to monitor
+         *          (e.g. error, ready to read, ready to write, & etc.)
+         */
+        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), -1);
+
+        /* Source: errno.h
+         * EINTR    an error number returned by a syscall when it is interrupted
+         */
+        if (rv == 0 && errno == EINTR) {
+            continue; // retry polling by performing another iteration 
+        }
+        if (rv < 0) {
+            die("poll()");
+        }
+
+        if (poll_args[0].revents) {
+            if (Conn* conn = handle_accept(fd)) {
+                if (fd2conn.size() <= (size_t)conn->fd) {
+                    fd2conn.resize(conn->fd + 1);
+                }
+                fd2conn[conn->fd] = conn;
             }
         }
 
-        /* Source: man close.2
-         * close() closes a file descriptor
-         */
-        close(connfd);
+        for (size_t i = 1; i < poll_args.size(); ++i) {
+            uint32_t ready = poll_args[i].revents;
+            Conn* conn = fd2conn[poll_args[i].fd];
+            if (ready & POLLIN) {
+                handle_read(conn);
+            }
+            if (ready & POLLOUT) {
+                handle_write(conn);
+            }
+            if ((ready & POLLERR) || conn->want_close) {
+                (void)close(conn->fd);
+                fd2conn[conn->fd] = NULL;
+                delete conn;
+            }
+        }
     }
+
+    // while (true) {
+    //     struct sockaddr_in client_addr = {};
+    //     socklen_t addrlen = sizeof(client_addr);
+    //
+    //     /* Source: man accept.2
+    //      * accept() the first pending connection in the socket queue and returns a
+    //      *          file descriptor containing the address and port of both the 
+    //      *          server and the client
+    //      */
+    //     int connfd = accept(fd, (struct sockaddr*)&client_addr, &addrlen);
+    //     if (connfd < 0) {
+    //         continue;
+    //     }
+    //
+    //     while (true) {
+    //         int32_t err = one_request(connfd);
+    //         if (err) {
+    //             break;
+    //         }
+    //     }
+    //
+    //     /* Source: man close.2
+    //      * close() closes a file descriptor
+    //      */
+    //     close(connfd);
+    // }
 
     return 0;
 }
