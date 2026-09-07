@@ -45,7 +45,10 @@ static int32_t query(int fd, const char* text) {
     return 0;
 };
 
-int main () {
+int main (int argc, char *argv[]) {
+    if (argc < 2) {
+        die("not enough arguments");
+    }
     /* Source: man socket.2
      * AF_INET      use IPv4 internet protocols
      *
@@ -71,11 +74,7 @@ int main () {
         die("connect()");
     }
 
-    int32_t err = query(fd, "hello1");
-    if (err) {
-        goto L_DONE;
-    }
-    err = query(fd, "hello2");
+    int32_t err = query(fd, argv[1]);
     if (err) {
         goto L_DONE;
     }
