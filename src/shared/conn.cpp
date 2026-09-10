@@ -11,16 +11,7 @@
 
 #include "shared/conn.h"
 #include "shared/io.h"
-
-// Appends bytes to the end of a `std::vector` based buffer.
-static void buf_append(std::vector<uint8_t>& buf, const uint8_t* data, size_t len) {
-    buf.insert(buf.end(), data, data + len);
-}
-
-// Deletes bytes from a `std::vector` based buffer via a start-end range.
-static void buf_consume(std::vector<uint8_t>& buf, size_t n) {
-    buf.erase(buf.begin(), buf.begin() + n);
-}
+#include "shared/buffer.h"
 
 // Populates the Conn object's outgoing buffer only if the incoming payload is
 // complete (i.e. payload contains a header and a body matching the length 
@@ -86,7 +77,7 @@ void handle_read(Conn* conn) {
 
     buf_append(conn->incoming, buf, (size_t)rv);
 
-    try_one_request(conn);
+    while(try_one_request(conn)) {}
 
     if (conn->outgoing.size() > 0) {
         conn->want_read = false;

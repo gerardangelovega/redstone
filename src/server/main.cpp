@@ -80,6 +80,8 @@ int main () {
         die("bind()"); 
     }
 
+    fd_set_nb(fd); // set socket fd to non-blocking
+
     /* Source: man listen, man listen.2
      * SOMAXCONN    defines the maximum pending connection requests to a socket
      *              (default limit is set to 4096).
@@ -92,8 +94,6 @@ int main () {
 
     std::vector<Conn *> fd2conn;
     std::vector<struct pollfd> poll_args;
-
-    fd_set_nb(fd); // set socket fd to non-blocking
 
     while (true) {
         poll_args.clear();

@@ -1,54 +1,65 @@
+#include <cstddef>
 #include <cstdint>
 #include <errno.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
 
+#include "shared/conn.h"
 #include "shared/io.h"
 #include "shared/error.h"
+#include "shared/buffer.h"
 
-static int32_t query(int fd, const char* text) {
-    uint32_t len = (uint32_t)strlen(text);
+static int32_t send_req(int fd, const uint8_t* text, size_t len) {
     if (len > K_MAX_MSG) {
         return -1;
     }
 
-    char wbuf[4 + K_MAX_MSG];
-    mempcpy(wbuf, &len, 4);
-    mempcpy(&wbuf[4], text, len);
-    if (int32_t err = write_all(fd, wbuf, 4 + len)) {
+    std::vector<uint8_t> wbuf;
+    buf_append(wbuf, (const uint8_t*)&len, CONN_HEADER_LEN);
+    buf_append(wbuf, text, len);
+    return write_all(fd, wbuf.data(), wbuf.size());
+}
+
+static int32_t read_res(int fd) {
+    std::vector<uint8_t> rbuf;
+    rbuf.resize(CONN_HEADER_LEN);
+    errno = 0;
+    int32_t err = read_full(fd, &rbuf[0], CONN_HEADER_LEN);
+    if (err) {
+        if (errno == 0) {
+            msg("EOF");
+        } else {
+            msg("read() error");
+        }
         return err;
     }
 
-    char rbuf[4 + K_MAX_MSG + 1];
-    errno = 0;
-    int32_t err = read_full(fd, rbuf, 4);
-    if (err) {
-        msg(err == 0 ? "EOF" : "read() error");
-        return err;
-    }
-    mempcpy(&len, rbuf, 4);
+    uint32_t len = 0;
+    memcpy(&len, rbuf.data(), CONN_HEADER_LEN);
     if (len > K_MAX_MSG) {
         msg("too long");
         return -1;
     }
+
+    rbuf.resize(CONN_HEADER_LEN + len);
     err = read_full(fd, &rbuf[4], len);
     if (err) {
         msg("read() error");
         return err;
     }
-    printf("server says: %.*s\n", len, &rbuf[4]);
-    return 0;
-};
 
-int main (int argc, char *argv[]) {
-    if (argc < 2) {
-        die("not enough arguments");
-    }
+    printf("len:%u data:%.*s\n", len, len < 100 ? len : 100, &rbuf[4]);
+    return 0;
+}
+
+int main () {
     /* Source: man socket.2
      * AF_INET      use IPv4 internet protocols
      *
@@ -74,10 +85,26 @@ int main (int argc, char *argv[]) {
         die("connect()");
     }
 
-    int32_t err = query(fd, argv[1]);
-    if (err) {
-        goto L_DONE;
+    std::vector<std::string> query_list = {
+        "hello1",
+        "hello2",
+        "hello3",
+        std::string(K_MAX_MSG, 'z'),
+        "hello5"
+    };
+    for (const std::string &s : query_list) {
+        int32_t err = send_req(fd, (uint8_t*)s.data(), s.size());
+        if (err) {
+            goto L_DONE;
+        }
     }
+    for (size_t i = 0; i < query_list.size(); i++) {
+        int32_t err = read_res(fd);
+        if (err) {
+            goto L_DONE;
+        }
+    }
+
 L_DONE:
     close(fd);
     return 0;

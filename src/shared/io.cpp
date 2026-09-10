@@ -1,10 +1,11 @@
 #include <cstddef>
 #include <assert.h>
+#include <cstdint>
 #include <unistd.h>
 
 #include "shared/io.h"
 
-int32_t read_full(int fd, char* buf, size_t n) {
+int32_t read_full(int fd, uint8_t* buf, size_t n) {
     while (n > 0) {
         /* Source: man read.2
          * read()   reads a specified number of bytes from a file descriptor into a 
@@ -21,7 +22,7 @@ int32_t read_full(int fd, char* buf, size_t n) {
     return 0;
 }
 
-int32_t write_all(int fd, const char* buf, size_t n) {
+int32_t write_all(int fd, const uint8_t* buf, size_t n) {
     while (n > 0) {
         /* Source: man read.2
          * write()   writes a specified number of bytes from a buffer into a file 
