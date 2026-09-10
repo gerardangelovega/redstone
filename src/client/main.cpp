@@ -11,27 +11,38 @@
 #include <unistd.h>
 #include <vector>
 
-#include "shared/conn.h"
 #include "shared/io.h"
 #include "shared/error.h"
-#include "shared/buffer.h"
 
-static int32_t send_req(int fd, const uint8_t* text, size_t len) {
+static int32_t send_req(int fd, const std::vector<std::string>& cmd) {
+    uint32_t len = 4;
+    for (const std::string& s : cmd) {
+        len = len + 4 + s.size();
+    }
     if (len > K_MAX_MSG) {
         return -1;
     }
 
-    std::vector<uint8_t> wbuf;
-    buf_append(wbuf, (const uint8_t*)&len, CONN_HEADER_LEN);
-    buf_append(wbuf, text, len);
-    return write_all(fd, wbuf.data(), wbuf.size());
+    printf("payload send size is %d\n", len);
+
+    char wbuf[4 + K_MAX_MSG];
+    memcpy(&wbuf[0], &len, 4);
+    uint32_t n = cmd.size();
+    memcpy(&wbuf[4], &n, 4);
+    size_t cur = 8;
+    for (const std::string& s : cmd) {
+        uint32_t p = (uint32_t)s.size();
+        memcpy(&wbuf[cur], &p, 4);
+        memcpy(&wbuf[cur + 4], s.data(), s.size());
+        cur = cur + 4 + s.size();
+    }
+    return write_all(fd, wbuf, 4 + len);
 }
 
 static int32_t read_res(int fd) {
-    std::vector<uint8_t> rbuf;
-    rbuf.resize(CONN_HEADER_LEN);
+    char rbuf[4 + K_MAX_MSG];
     errno = 0;
-    int32_t err = read_full(fd, &rbuf[0], CONN_HEADER_LEN);
+    int32_t err = read_full(fd, rbuf, 4);
     if (err) {
         if (errno == 0) {
             msg("EOF");
@@ -42,24 +53,29 @@ static int32_t read_res(int fd) {
     }
 
     uint32_t len = 0;
-    memcpy(&len, rbuf.data(), CONN_HEADER_LEN);
+    memcpy(&len, rbuf, 4);
     if (len > K_MAX_MSG) {
         msg("too long");
         return -1;
     }
 
-    rbuf.resize(CONN_HEADER_LEN + len);
     err = read_full(fd, &rbuf[4], len);
     if (err) {
         msg("read() error");
         return err;
     }
 
-    printf("len:%u data:%.*s\n", len, len < 100 ? len : 100, &rbuf[4]);
+    uint32_t rescode = 0;
+    if (len < 4) {
+        msg("bad response");
+        return -1;
+    }
+    memcpy(&rescode, &rbuf[4], 4);
+    printf("server says: [%u] len:%d %.*s\n", rescode, len, len - 4, &rbuf[8]);
     return 0;
 }
 
-int main () {
+int main (int argc, char *argv[]) {
     /* Source: man socket.2
      * AF_INET      use IPv4 internet protocols
      *
@@ -85,24 +101,19 @@ int main () {
         die("connect()");
     }
 
-    std::vector<std::string> query_list = {
-        "hello1",
-        "hello2",
-        "hello3",
-        std::string(K_MAX_MSG, 'z'),
-        "hello5"
-    };
-    for (const std::string &s : query_list) {
-        int32_t err = send_req(fd, (uint8_t*)s.data(), s.size());
-        if (err) {
-            goto L_DONE;
-        }
+    std::vector<std::string> cmd;
+    for (int i = 1; i < argc; ++i) {
+        cmd.push_back(argv[i]);
+        printf("arg %d: %s\n", i, argv[i]);
     }
-    for (size_t i = 0; i < query_list.size(); i++) {
-        int32_t err = read_res(fd);
-        if (err) {
-            goto L_DONE;
-        }
+
+    int32_t err = send_req(fd, cmd);
+    if (err) {
+        goto L_DONE;
+    }
+    err = read_res(fd);
+    if (err) {
+        goto L_DONE;
     }
 
 L_DONE:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <stdint.h>
 #include <vector>
 
@@ -25,3 +26,8 @@ Conn* handle_accept(int fd);
 void handle_read(Conn* conn);
 
 void handle_write(Conn* conn);
+
+struct Response {
+    uint32_t status = 0;
+    std::vector<uint8_t> data;
+};
