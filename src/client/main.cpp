@@ -23,8 +23,6 @@ static int32_t send_req(int fd, const std::vector<std::string>& cmd) {
         return -1;
     }
 
-    printf("payload send size is %d\n", len);
-
     char wbuf[4 + K_MAX_MSG];
     memcpy(&wbuf[0], &len, 4);
     uint32_t n = cmd.size();
@@ -71,7 +69,11 @@ static int32_t read_res(int fd) {
         return -1;
     }
     memcpy(&rescode, &rbuf[4], 4);
-    printf("server says: [%u] len:%d %.*s\n", rescode, len, len - 4, &rbuf[8]);
+    if (len - 4  > 0) {
+        printf("server says: status: %u, data: %.*s\n", rescode, len - 4, &rbuf[8]);
+    } else {
+        printf("server says: status: %u\n", rescode);
+    }
     return 0;
 }
 
@@ -104,7 +106,6 @@ int main (int argc, char *argv[]) {
     std::vector<std::string> cmd;
     for (int i = 1; i < argc; ++i) {
         cmd.push_back(argv[i]);
-        printf("arg %d: %s\n", i, argv[i]);
     }
 
     int32_t err = send_req(fd, cmd);

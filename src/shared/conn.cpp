@@ -128,9 +128,6 @@ static bool try_one_request(Conn *conn) {
         return false;
     }
 
-    printf("client says: %.*s\n", msg_len, &conn->incoming[CONN_MSG_OFFSET]);
-    printf("client payload size is %lu\n", conn->incoming.size());
-
     const uint8_t* request = &conn->incoming[CONN_MSG_OFFSET];
 
     std::vector<std::string> cmd;
@@ -139,6 +136,13 @@ static bool try_one_request(Conn *conn) {
         conn->want_close = true;
         return false;
     }
+
+    printf("client says:");
+    for (const std::string& s : cmd) {
+        printf(" %s", s.c_str()) ;
+    }
+
+    printf("\n");
     Response resp;
     do_request(cmd, resp);
     make_response(resp, conn->outgoing);
