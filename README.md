@@ -4,13 +4,13 @@ An in-memory key-value database written in C++ (for now) and built using the Zig
 # Roadmap
 The following are features I intend to implement/execute as I continue to work on Redstone in my spare time.
 ## Implemented
-- [x] ~Request-Response Protocol
+- [x] Request-Response Protocol
 - [x] Concurrent IO
 - [x] Non-Blocking IO
 - [x] Key-Value Store
 ## Work In Progress
 - [ ] Optimized Buffer Implementation
-- [ ] Optimized Hashtable Implementation
+- [x] Optimized Hashtable Implementation
 - [ ] Data Serialization
 - [ ] Indexing
 - [ ] Expiration
