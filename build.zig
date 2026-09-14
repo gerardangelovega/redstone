@@ -14,9 +14,10 @@ pub fn build(b: *std.Build) !void {
     };
     const shared_source_files: []const []const u8 = &.{
         "src/shared/buffer.cpp",
-        "src/shared/db.cpp",
         "src/shared/conn.cpp",
+        "src/shared/data.cpp",
         "src/shared/error.cpp",
+        "src/shared/hashtable.cpp",
         "src/shared/io.cpp",
     };
     const flags: []const []const u8 = &.{

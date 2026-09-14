@@ -13,16 +13,11 @@
 #include <vector>
 
 #include "shared/conn.h"
+#include "shared/data.h"
 #include "shared/error.h"
 #include "shared/io.h"
 #include "shared/buffer.h"
-#include "shared/db.h"
-
-enum {
-    RES_OK  = 0,
-    RES_ERR = 1,
-    RES_NX  = 2,
-};
+#include "shared/status.h"
 
 static bool read_u32(const uint8_t*& cur, const uint8_t* end, uint32_t& out) {
     if (cur + 4 > end) {
@@ -81,17 +76,11 @@ static int32_t parse_req(
 
 static void do_request(std::vector<std::string>& cmd, Response &out) {
     if (cmd.size() == 2 && cmd[0] == "get") {
-        auto it = g_data.find(cmd[1]);
-        if (it == g_data.end()) {
-            out.status = RES_NX;
-            return;
-        }
-        const std::string& val = it->second;
-        out.data.assign(val.begin(), val.end());
+        return do_get(cmd, out);
     } else if (cmd.size() == 3 && cmd[0] == "set") {
-        g_data[cmd[1]].swap(cmd[2]);
+        return do_set(cmd, out);
     } else if (cmd.size() == 2 && cmd[0] == "del") {
-        g_data.erase(cmd[1]);
+        return do_del(cmd, out);
     } else {
         out.status = RES_ERR;
     }
