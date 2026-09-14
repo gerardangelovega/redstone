@@ -17,6 +17,7 @@ The following are features I intend to implement/execute as I continue to work o
 - [ ] Multi-Threading
 ## Planned
 - [ ] Zig Rewrite
+- [ ] Document Project and Code
 
 # Q&A
 1.
