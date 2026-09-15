@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "server/conn.h"
+#include "server/buffer.h"
 #include "server/hashtable.h"
 
 #define container_of(ptr, T, member) \
@@ -22,11 +22,11 @@ struct Entry {
 };
 
 bool entry_eq(HNode* lhs, HNode* rhs);
+bool cb_keys(HNode* node, void* arg);
 
 uint64_t str_hash(const uint8_t *data, size_t len);
 
-void do_get(std::vector<std::string>& cmd, Response& out);
-
-void do_set(std::vector<std::string>& cmd, Response& out);
-
-void do_del(std::vector<std::string>& cmd, Response& out);
+void do_get(std::vector<std::string>& cmd, Buffer& out);
+void do_set(std::vector<std::string>& cmd, Buffer& out);
+void do_del(std::vector<std::string>& cmd, Buffer& out);
+void do_keys(std::vector<std::string>& cmd, Buffer& out);

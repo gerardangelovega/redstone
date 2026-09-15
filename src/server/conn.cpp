@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <vector>
 
+#include "server/serialize.h"
 #include "shared/error.h"
 #include "shared/io.h"
 #include "shared/protocol.h"
@@ -75,27 +76,49 @@ static int32_t parse_req(
     return 0;
 }
 
-static void do_request(std::vector<std::string>& cmd, Response &out) {
+static void response_begin(Buffer& out, size_t* header) {
+    *header = out.size();
+    buf_append_u32(out, 0);
+}
+static size_t response_size(Buffer& out, size_t header) {
+    return out.size() - header - 4;
+}
+static void response_end(Buffer& out, size_t header) { 
+    size_t msg_size = response_size(out, header);
+    if (msg_size > K_MAX_MSG) {
+        out.resize(header + 4);
+        out_err(out, ERR_TOO_BIG, "response is too big.");
+        msg_size = response_size(out, header);
+    }
+    uint32_t len = (uint32_t)msg_size;
+    memcpy(&out[header], &len, 4);
+}
+
+static void do_request(std::vector<std::string>& cmd, Buffer& out) {
     if (cmd.size() == 2 && cmd[0] == "get") {
         return do_get(cmd, out);
     } else if (cmd.size() == 3 && cmd[0] == "set") {
         return do_set(cmd, out);
     } else if (cmd.size() == 2 && cmd[0] == "del") {
         return do_del(cmd, out);
-    } else {
-        out.status = RES_ERR;
+    } else if (cmd.size() == 1 && cmd[0] == "keys") {
+        return do_keys(cmd, out);
+    }
+    else {
+        return out_err(out, ERR_UNKNOWN, "unknown command");
+        // out.status = RES_ERR;
     }
 }
 
-static void make_response(
-    const Response& resp,
-    std::vector<uint8_t> &out
-) {
-    uint32_t resp_len = 4 + (uint32_t)resp.data.size();
-    buf_append(out, (const uint8_t*)&resp_len, 4);
-    buf_append(out, (const uint8_t*)&resp.status, 4);
-    buf_append(out, resp.data.data(), resp.data.size());
-}
+// static void make_response(
+//     const Response& resp,
+//     std::vector<uint8_t> &out
+// ) {
+//     uint32_t resp_len = 4 + (uint32_t)resp.data.size();
+//     buf_append(out, (const uint8_t*)&resp_len, 4);
+//     buf_append(out, (const uint8_t*)&resp.status, 4);
+//     buf_append(out, resp.data.data(), resp.data.size());
+// }
 
 // Populates the Conn object's outgoing buffer only if the incoming payload is
 // complete (i.e. payload contains a header and a body matching the length 
@@ -132,10 +155,16 @@ static bool try_one_request(Conn *conn) {
         printf(" %s", s.c_str()) ;
     }
 
-    printf("\n");
-    Response resp;
-    do_request(cmd, resp);
-    make_response(resp, conn->outgoing);
+    // TODO: New Implementation fo Response
+    size_t header_pos = 0;
+    response_begin(conn->outgoing, &header_pos);
+    do_request(cmd, conn->outgoing);
+    response_end(conn->outgoing, header_pos);
+
+    // printf("\n");
+    // Response resp;
+    // do_request(cmd, resp);
+    // make_response(resp, conn->outgoing);
 
     buf_consume(conn->incoming, 4 + msg_len);
 

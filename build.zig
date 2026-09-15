@@ -7,11 +7,12 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const server_source_files: []const []const u8 = &.{
-        "src/server/main.cpp",
         "src/server/buffer.cpp",
         "src/server/conn.cpp",
         "src/server/data.cpp",
         "src/server/hashtable.cpp",
+        "src/server/main.cpp",
+        "src/server/serialize.cpp",
     };
     const client_source_files: []const []const u8 = &.{
         "src/client/main.cpp",

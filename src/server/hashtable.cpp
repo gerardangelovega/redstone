@@ -2,6 +2,7 @@
 #include <cstdlib>
 
 #include "server/hashtable.h"
+#include "server/data.h"
 
 void h_init(HTable* htable, size_t n) {
     // Assert that the capacity of the hash table is at least one and that the initial
@@ -53,6 +54,17 @@ HNode* h_detach(HTable* htable, HNode** from) {
     *from = node->next;
     htable->size--;
     return node;
+}
+
+bool h_foreach(HTable* htable, bool (*f)(HNode*, void*), void* arg) {
+    for (size_t i = 0; htable->mask != 0 && i <= htable->mask; ++i) {
+        for (HNode* node = htable->table[i]; node != NULL; node = node->next) {
+            if (!f(node, arg)) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 HNode* hm_lookup(HMap* hmap, HNode* key, bool (*eq)(HNode*, HNode*)) {
@@ -119,4 +131,12 @@ void hm_help_rehashing(HMap* hmap) {
         free(hmap->older.table);
         hmap->older = HTable{};
     }
+}
+
+size_t hm_size(HMap* hmap) {
+    return hmap->older.size + hmap->newer.size;
+}
+
+void hm_foreach(HMap* hmap, bool (*f)(HNode*, void*), void* arg) {
+    h_foreach(&hmap->newer, f, arg) && h_foreach(&hmap->older, f, arg);
 }

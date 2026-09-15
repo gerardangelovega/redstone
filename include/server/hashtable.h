@@ -19,6 +19,7 @@ void    h_init(HTable*   htable, size_t  n);
 void    h_insert(HTable* htable, HNode*  node);
 HNode** h_lookup(HTable* htable, HNode*  key, bool (*eq)(HNode*, HNode*));
 HNode*  h_detach(HTable* htable, HNode** from);
+bool    h_foreach(HTable* htable, bool (*f)(HNode*, void*), void* arg);
 
 constexpr size_t K_MAX_LOAD_FACTOR = 8;
 constexpr size_t K_REHASHING_WORK = 128;
@@ -33,3 +34,5 @@ void   hm_insert(HMap* hmap, HNode* node);
 HNode* hm_delete(HMap* hmap, HNode* key, bool (*eq)(HNode*, HNode*));
 void   hm_trigger_rehashing(HMap* hmap);
 void   hm_help_rehashing(HMap* hmap);
+size_t hm_size(HMap* hmap);
+void   hm_foreach(HMap* hmap, bool (*f)(HNode*, void*), void* arg);
