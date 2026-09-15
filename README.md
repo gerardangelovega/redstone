@@ -11,7 +11,7 @@ The following are features I intend to implement/execute as I continue to work o
 ## Work In Progress
 - [ ] Optimized Buffer Implementation
 - [x] Optimized Hashtable Implementation
-- [ ] Data Serialization
+- [x] Data Serialization
 - [ ] Indexing
 - [ ] Expiration
 - [ ] Multi-Threading
