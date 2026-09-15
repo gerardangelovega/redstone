@@ -3,9 +3,10 @@
 #include <string>
 
 #include "shared/io.h"
+#include "shared/protocol.h"
+
 #include "server/data.h"
 #include "server/hashtable.h"
-#include "server/status.h"
 
 struct Data g_data;
 
