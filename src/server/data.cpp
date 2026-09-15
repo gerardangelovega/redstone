@@ -2,10 +2,10 @@
 #include <cstdint>
 #include <string>
 
-#include "shared/data.h"
-#include "shared/hashtable.h"
 #include "shared/io.h"
-#include "shared/status.h"
+#include "server/data.h"
+#include "server/hashtable.h"
+#include "server/status.h"
 
 struct Data g_data;
 

@@ -1,9 +1,10 @@
 #pragma once
 
-#include "shared/conn.h"
-#include "shared/hashtable.h"
 #include <string>
 #include <vector>
+
+#include "server/conn.h"
+#include "server/hashtable.h"
 
 #define container_of(ptr, T, member) \
     ((T*)((char*)ptr - offsetof(T, member)))

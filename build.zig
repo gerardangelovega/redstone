@@ -8,16 +8,16 @@ pub fn build(b: *std.Build) !void {
 
     const server_source_files: []const []const u8 = &.{
         "src/server/main.cpp",
+        "src/server/buffer.cpp",
+        "src/server/conn.cpp",
+        "src/server/data.cpp",
+        "src/server/hashtable.cpp",
     };
     const client_source_files: []const []const u8 = &.{
         "src/client/main.cpp",
     };
     const shared_source_files: []const []const u8 = &.{
-        "src/shared/buffer.cpp",
-        "src/shared/conn.cpp",
-        "src/shared/data.cpp",
         "src/shared/error.cpp",
-        "src/shared/hashtable.cpp",
         "src/shared/io.cpp",
     };
     const flags: []const []const u8 = &.{

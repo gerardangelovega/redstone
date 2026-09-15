@@ -1,4 +1,4 @@
-#include "shared/buffer.h"
+#include "server/buffer.h"
 
 // Appends bytes to the end of a `std::vector` based buffer.
 void buf_append(std::vector<uint8_t>& buf, const uint8_t* data, size_t len) {

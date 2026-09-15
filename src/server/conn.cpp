@@ -12,12 +12,12 @@
 #include <unistd.h>
 #include <vector>
 
-#include "shared/conn.h"
-#include "shared/data.h"
 #include "shared/error.h"
 #include "shared/io.h"
-#include "shared/buffer.h"
-#include "shared/status.h"
+#include "server/conn.h"
+#include "server/data.h"
+#include "server/buffer.h"
+#include "server/status.h"
 
 static bool read_u32(const uint8_t*& cur, const uint8_t* end, uint32_t& out) {
     if (cur + 4 > end) {
