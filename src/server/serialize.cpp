@@ -1,4 +1,7 @@
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 #include "shared/protocol.h"
 
@@ -30,4 +33,13 @@ void out_err(Buffer& out, uint32_t code, const std::string& msg) {
 void out_arr(Buffer& out, uint32_t n) {
     buf_append_u8(out, TAG_ARR);
     buf_append_u32(out, n);
+}
+size_t out_begin_arr(Buffer& out) {
+    out.push_back(TAG_ARR);
+    buf_append_u32(out, 0);
+    return out.size() -4;
+}
+void out_end_arr(Buffer& out, size_t ctx, uint32_t n) {
+    assert(out[ctx-1] == TAG_ARR);
+    memcpy(&out[ctx], &n, 4);
 }

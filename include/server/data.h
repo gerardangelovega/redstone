@@ -1,13 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include "server/buffer.h"
 #include "server/hashtable.h"
-
-#define container_of(ptr, T, member) \
-    ((T*)((char*)ptr - offsetof(T, member)))
+#include "server/zset.h"
 
 struct Data {
     HMap db;
@@ -15,12 +14,24 @@ struct Data {
 
 extern struct Data g_data;
 
+enum {
+    T_INIT = 0,
+    T_STR  = 1,
+    T_ZSET = 2,
+};
+
 struct Entry {
     struct HNode node;
     std::string key;
     std::string val;
+
+    uint32_t type = 0;
+
+    std::string str;
+    ZSet zset;
 };
 
+Entry* entry_new(uint32_t type);
 bool entry_eq(HNode* lhs, HNode* rhs);
 bool cb_keys(HNode* node, void* arg);
 
@@ -30,3 +41,7 @@ void do_get(std::vector<std::string>& cmd, Buffer& out);
 void do_set(std::vector<std::string>& cmd, Buffer& out);
 void do_del(std::vector<std::string>& cmd, Buffer& out);
 void do_keys(std::vector<std::string>& cmd, Buffer& out);
+void do_zadd(std::vector<std::string>& cmd, Buffer& out);
+void do_zrem(std::vector<std::string>& cmd, Buffer& out);
+void do_zscore(std::vector<std::string>& cmd, Buffer& out);
+void do_zquery(std::vector<std::string>& cmd, Buffer& out);

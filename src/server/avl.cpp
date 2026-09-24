@@ -1,28 +1,12 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <regex>
 
 #include "server/avl.h"
 
 static uint32_t max(uint32_t lhs, uint32_t rhs) {
     return lhs > rhs ? lhs : rhs;
-}
-
-// initializes AVLNode pointers to null and sets the height of the node to 1
-void avl_init(AVLNode* node) {
-    node->left = node->right = node->parent = NULL;
-    node->height = 1;
-    node->cnt = 1;
-}
-
-// if the node is not null, returns the height of the node
-// otherwise, returns 0
-uint32_t avl_height(AVLNode* node) {
-    return node ? node->height : 0;
-}
-
-uint32_t avl_cnt(AVLNode* node) {
-    return node ? node->cnt : 0;
 }
 
 // sets the height of a node to 1 + the tallest subtree of the node
@@ -220,4 +204,81 @@ AVLNode* avl_del(AVLNode* node) {
     // make the victim either the root of the tree or the child of the node's parent
     *from = victim;
     return root;
+}
+
+static AVLNode* successor(AVLNode* node) {
+    // If the node has a right subtree, then we can find the right subtree's leftmost
+    // node to find its succssor by property of a BST
+    if (node->right) {
+        for (node = node->right; node->left; node = node->left) {}
+        return node;
+    }
+    // If the node has no right subtree, then we can find the closest ancestor in 
+    // which the node is a member of it's left subtree and return the closest ancestor
+    // as its successor by property of a BST
+    while (AVLNode* parent = node->parent) {
+        if (node == parent->left) {
+            return parent;
+        }
+        node = parent;
+    }
+    // If the node has no right subtree and is not a member of some ancestor's left
+    // subtree, then the node has no successors by property of a BST
+    return NULL;
+}
+
+static AVLNode* predecessor(AVLNode* node) {
+    // If the node has a left subtree, then we can find the left subtree's rightmost
+    // node to find its predecessor by property of a BST
+    if (node->left) {
+        for (node = node->left; node->right; node = node->right) {}
+        return node;
+    }
+    // If the node has no left subtree, then we can find the closest ancestor in 
+    // which the node is a member of it's right subtree and return the closest 
+    // ancestor as its successor by property of a BST
+    while (AVLNode* parent = node->parent) {
+        if (node == parent->right) {
+            return parent;
+        }
+        node = parent;
+    }
+    // If the node has neither a left subtree nor belongs to the rightmost subtree of
+    // some ancestor, then the node has no predecessor by property of a BST
+    return NULL;
+}
+
+AVLNode* avl_offset_reg(AVLNode* node, int64_t offset) {
+    for (; offset > 0 && node; offset--) {
+        node = successor(node);
+    }
+    for (; offset < 0 && node; offset++) {
+        node = predecessor(node);
+    }
+    return node;
+}
+
+AVLNode* avl_offset(AVLNode* node, int64_t offset) {
+    int64_t pos = 0;
+    while (offset != pos) {
+        if (pos < offset && pos + avl_cnt(node->right) >= offset) {
+            node = node->right;
+            pos += avl_cnt(node->left) + 1;
+        } else if (pos > offset && pos - avl_cnt(node->left) <= offset) {
+            node = node->left;
+            pos -= avl_cnt(node->right) + 1;
+        } else {
+            AVLNode* parent = node->parent;
+            if (!parent) {
+                return NULL;
+            }
+            if (parent->right == node) {
+                pos -= avl_cnt(node->left) + 1;
+            } else {
+                pos += avl_cnt(node->right) + 1;
+            }
+            node = parent;
+        }
+    }
+    return node;
 }

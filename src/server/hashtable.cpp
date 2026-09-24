@@ -2,7 +2,6 @@
 #include <cstdlib>
 
 #include "server/hashtable.h"
-#include "server/data.h"
 
 void h_init(HTable* htable, size_t n) {
     // Assert that the capacity of the hash table is at least one and that the initial

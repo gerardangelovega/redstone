@@ -12,3 +12,5 @@ void out_int(Buffer& out, int64_t val);
 void out_dbl(Buffer& out, double val);
 void out_err(Buffer& out, uint32_t code, const std::string& msg);
 void out_arr(Buffer& out, uint32_t n);
+size_t out_begin_arr(Buffer& out);
+void out_end_arr(Buffer& out, size_t ctx, uint32_t n);

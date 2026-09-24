@@ -15,9 +15,15 @@ struct AVLNode {
 AVLNode* rot_left(AVLNode* node);
 AVLNode* rot_right(AVLNode* node);
 
-void     avl_init(AVLNode* node);
-uint32_t avl_height(AVLNode* node);
-uint32_t avl_cnt(AVLNode* node);
+inline void avl_init(AVLNode* node) {
+    node->left = node->right = node->parent = NULL;
+    node->height = 1;
+    node->cnt = 1;
+}
+
+inline uint32_t avl_height(AVLNode* node) { return node ? node->height : 0; }
+inline uint32_t avl_cnt(AVLNode* node) { return node ? node->cnt : 0; }
+
 void     avl_update(AVLNode* node);
 uint8_t  avl_get_height_diff(AVLNode* node);
 AVLNode* avl_get_parent(AVLNode* node);
@@ -26,3 +32,5 @@ AVLNode* avl_fix_right(AVLNode* node);
 AVLNode* avl_fix(AVLNode* node);
 AVLNode* avl_del_easy(AVLNode* node);
 AVLNode* avl_del(AVLNode* node);
+AVLNode* avl_offset_reg(AVLNode* node, int64_t offset);
+AVLNode* avl_offset(AVLNode* node, int64_t offset);

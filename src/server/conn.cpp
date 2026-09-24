@@ -96,17 +96,31 @@ static void response_end(Buffer& out, size_t header) {
 
 static void do_request(std::vector<std::string>& cmd, Buffer& out) {
     if (cmd.size() == 2 && cmd[0] == "get") {
+        printf("Executing get\n");
         return do_get(cmd, out);
     } else if (cmd.size() == 3 && cmd[0] == "set") {
+        printf("Executing set\n");
         return do_set(cmd, out);
     } else if (cmd.size() == 2 && cmd[0] == "del") {
+        printf("Executing del\n");
         return do_del(cmd, out);
     } else if (cmd.size() == 1 && cmd[0] == "keys") {
+        printf("Executing keys\n");
         return do_keys(cmd, out);
-    }
-    else {
+    } else if (cmd.size() == 4 && cmd[0] == "zadd") {
+        printf("Executing zadd\n");
+        return do_zadd(cmd, out);
+    } else if (cmd.size() == 3 && cmd[0] == "zrem") {
+        printf("Executing zrem\n");
+        return do_zrem(cmd, out);
+    } else if (cmd.size() == 3 && cmd[0] == "zscore") {
+        printf("Executing zscore\n");
+        return do_zscore(cmd, out);
+    } else if (cmd.size() == 6 && cmd[0] == "zquery") {
+        printf("Executing zquery\n");
+        return do_zquery(cmd, out);
+    } else {
         return out_err(out, ERR_UNKNOWN, "unknown command");
-        // out.status = RES_ERR;
     }
 }
 
@@ -154,6 +168,7 @@ static bool try_one_request(Conn *conn) {
     for (const std::string& s : cmd) {
         printf(" %s", s.c_str()) ;
     }
+    printf("\n");
 
     // TODO: New Implementation fo Response
     size_t header_pos = 0;

@@ -7,12 +7,15 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const server_source_files: []const []const u8 = &.{
+        "src/server/avl.cpp",
         "src/server/buffer.cpp",
+        "src/server/common.cpp",
         "src/server/conn.cpp",
         "src/server/data.cpp",
         "src/server/hashtable.cpp",
         "src/server/main.cpp",
         "src/server/serialize.cpp",
+        "src/server/zset.cpp",
     };
     const client_source_files: []const []const u8 = &.{
         "src/client/main.cpp",
@@ -26,7 +29,9 @@ pub fn build(b: *std.Build) !void {
         "-Wextra",
         "-Wpedantic",
         "-Werror",
-        "-std=c++17"
+        "-Wno-zero-length-array",
+        "-Wno-gnu",
+        "-std=gnu++17",
     };
 
     const server_exe = b.addExecutable(.{
