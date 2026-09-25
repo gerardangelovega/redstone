@@ -109,6 +109,10 @@ static void do_request(std::vector<std::string>& cmd, Buffer& out) {
     } else if (cmd.size() == 1 && cmd[0] == "keys") {
         printf("Executing keys\n");
         return do_keys(cmd, out);
+    } else if (cmd.size() == 3 && cmd[0] == "pexpire") {
+        return do_expire(cmd, out);
+    } else if (cmd.size() == 2 && cmd[0] == "pttl") {
+        return do_ttl(cmd, out);
     } else if (cmd.size() == 4 && cmd[0] == "zadd") {
         printf("Executing zadd\n");
         return do_zadd(cmd, out);

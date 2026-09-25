@@ -3,9 +3,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #include "server/common.h"
+#include "server/heap.h"
 #include "server/serialize.h"
+#include "server/time.h"
 #include "server/zset.h"
 #include "shared/io.h"
 #include "shared/protocol.h"
@@ -30,6 +33,7 @@ void entry_del(Entry* ent) {
     if (ent->type == T_ZSET) {
         zset_clear(&ent->zset);
     }
+    entry_set_ttl(ent, -1);
     delete ent;
 }
 
@@ -37,6 +41,17 @@ bool entry_eq(HNode* lhs, HNode* rhs) {
     struct Entry* le = container_of(lhs, Entry, node);
     struct Entry* re = container_of(rhs, Entry, node);
     return le->key == re->key;
+}
+
+void entry_set_ttl(Entry* ent, int64_t ttl_ms) {
+    if (ttl_ms < 0 && ent->heap_idx != (size_t)-1) {
+        heap_delete(g_data.heap, ent->heap_idx);
+        ent->heap_idx = -1;
+    } else if (ttl_ms >= 0) {
+        uint64_t expire_at = get_monotonic_ms() + (uint64_t)ttl_ms;
+        HeapItem item = {expire_at, &ent->heap_idx};
+        heap_upsert(g_data.heap, ent->heap_idx, item);
+    }
 }
 
 bool cb_keys(HNode* node, void* arg) {
@@ -56,7 +71,7 @@ void do_get(std::vector<std::string>& cmd, Buffer& out) {
         // out.status = RES_NX;
         // return;
     }
-    const std::string& val = container_of(node, Entry, node)->val;
+    const std::string& val = container_of(node, Entry, node)->str;
     // assert(val.size() <= K_MAX_MSG);
     // out.data.assign(val.begin(), val.end());
     return out_str(out, val.data(), val.size());
@@ -68,12 +83,12 @@ void do_set(std::vector<std::string>& cmd, Buffer& out) {
     key.node.hcode = str_hash((uint8_t*)key.key.data(), key.key.size());
     HNode* node = hm_lookup(&g_data.db, &key.node, &entry_eq);
     if (node) {
-        container_of(node, Entry, node)->val.swap(cmd[2]);
+        container_of(node, Entry, node)->str.swap(cmd[2]);
     } else {
         Entry *ent = new Entry();
         ent->key.swap(key.key);
         ent->node.hcode = key.node.hcode;
-        ent->val.swap(cmd[2]);
+        ent->str.swap(cmd[2]);
         hm_insert(&g_data.db, &ent->node);
     }
     return out_nil(out);
@@ -201,4 +216,49 @@ void do_zquery(std::vector<std::string>& cmd, Buffer& out) {
         n = n + 2;
     }
     out_end_arr(out, ctx, (uint32_t)n);
+}
+
+void do_expire(std::vector<std::string>& cmd, Buffer& out) {
+    int64_t ttl_ms = 0;
+    if (!str_to_int(cmd[2], ttl_ms)) {
+        return out_err(out, ERR_BAD_ARG, "expect int64");
+    }
+
+    LookupKey key;
+    key.key.swap(cmd[1]);
+    key.node.hcode = str_hash((uint8_t*)key.key.data(), key.key.size());
+
+    HNode* node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+    if (node) {
+        Entry* ent = container_of(node, Entry, node);
+        entry_set_ttl(ent, ttl_ms);
+    }
+    return out_int(out, node ? 1 : 0);
+}
+
+void do_ttl(std::vector<std::string>& cmd, Buffer& out) {
+    printf(
+        "heap size %lu, now: %lu, heap[0] expire_at: %lu, heap[0] ttl: %lu\n",
+        g_data.heap.size(),
+        get_monotonic_ms(),
+        g_data.heap[0].val,
+        g_data.heap[0].val - get_monotonic_ms()
+    );
+    LookupKey key;
+    key.key.swap(cmd[1]);
+    key.node.hcode = str_hash((uint8_t*)key.key.data(), key.key.size());
+
+    HNode* node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+    if (!node) {
+        return out_int(out, -1);
+    }
+
+    Entry* ent = container_of(node, Entry, node);
+    if (ent->heap_idx == (size_t)-1) {
+        return out_int(out, -1);
+    }
+
+    uint64_t expire_at = g_data.heap[ent->heap_idx].val;
+    uint64_t now_ms = get_monotonic_ms();
+    return out_int(out, expire_at > now_ms ? (expire_at - now_ms) : 0);
 }

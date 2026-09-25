@@ -3,6 +3,7 @@
 #include <cstdint>
 
 constexpr uint64_t K_IDLE_TIMEOUT_MS = 5 * 1000;
+constexpr uint64_t K_TTL_MAX_WORKS = 2000;
 
 uint64_t get_monotonic_ms();
 
