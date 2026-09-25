@@ -33,6 +33,7 @@ struct Entry {
 
 Entry* entry_new(uint32_t type);
 bool entry_eq(HNode* lhs, HNode* rhs);
+void entry_del(Entry* ent);
 bool cb_keys(HNode* node, void* arg);
 
 uint64_t str_hash(const uint8_t *data, size_t len);

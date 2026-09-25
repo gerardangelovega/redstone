@@ -35,9 +35,11 @@ ZNode* zset_lookup(ZSet* zset, const char* name, size_t len);
 bool   zset_insert(ZSet* zset, const char* name, size_t len, double score);
 void   zset_update(ZSet* zset, ZNode* node, double score);
 void   zset_delete(ZSet* zset, ZNode* node);
+void   zset_clear(ZSet* zset);
 ZNode* zset_seekge(ZSet* zset, double score, const char* name, size_t len);
 bool   zless(AVLNode* lhs, double score, const char* name, size_t len);
 bool   zless(AVLNode* lhs, AVLNode* rhs);
 void   tree_insert(ZSet* zset, ZNode* node);
+void   tree_dispose(AVLNode* node);
 
 inline const ZSet k_empty_zset{};

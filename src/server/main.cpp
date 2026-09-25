@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <vector>
 
+#include "server/data.h"
+#include "server/hashtable.h"
+#include "server/zset.h"
 #include "shared/io.h"
 #include "shared/error.h"
 #include "server/conn.h"

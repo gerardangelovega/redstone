@@ -26,6 +26,13 @@ Entry* entry_new(uint32_t type) {
     return ent;
 }
 
+void entry_del(Entry* ent) {
+    if (ent->type == T_ZSET) {
+        zset_clear(&ent->zset);
+    }
+    delete ent;
+}
+
 bool entry_eq(HNode* lhs, HNode* rhs) {
     struct Entry* le = container_of(lhs, Entry, node);
     struct Entry* re = container_of(rhs, Entry, node);
@@ -78,7 +85,8 @@ void do_del(std::vector<std::string>& cmd, Buffer& out) {
     key.node.hcode = str_hash((uint8_t*)key.key.data(), key.key.size());
     HNode* node = hm_delete(&g_data.db, &key.node, &entry_eq);
     if (node) {
-        delete container_of(node, Entry, node);
+        // delete container_of(node, Entry, node);
+        entry_del(container_of(node, Entry, node));
     }
     return out_int(out, node ? 1 : 0);
 }

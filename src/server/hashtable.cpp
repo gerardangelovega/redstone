@@ -106,6 +106,12 @@ HNode* hm_delete(HMap* hmap, HNode* key, bool (*eq)(HNode*, HNode*)) {
     return NULL;
 }
 
+void hm_clear(HMap* hmap) {
+    free(hmap->newer.table);
+    free(hmap->older.table);
+    *hmap = HMap{};
+}
+
 void hm_trigger_rehashing(HMap* hmap) {
     // copy the new table to the old table
     hmap->older = hmap->newer;

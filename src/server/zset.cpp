@@ -80,6 +80,12 @@ void zset_delete(ZSet* zset, ZNode* node) {
     znode_del(node);
 }
 
+void zset_clear(ZSet* zset) {
+    hm_clear(&zset->hmap);
+    tree_dispose(zset->root);
+    zset->root = NULL;
+}
+
 // Finds the first (score, name) tuple that is greater than or equal to the 
 // (score, name) tuple specified in the parameters
 ZNode* zset_seekge(ZSet* zset, double score, const char* name, size_t len) {
@@ -122,6 +128,15 @@ void tree_insert(ZSet* zset, ZNode* node) {
     *from = &node->tree;
     node->tree.parent = parent;
     zset->root = avl_fix(&node->tree);
+}
+
+void tree_dispose(AVLNode* node) {
+    if (!node) {
+        return;
+    }
+    tree_dispose(node->left);
+    tree_dispose(node->right);
+    znode_del(container_of(node, ZNode, tree));
 }
 
 bool hcmp(HNode* node, HNode* key) {
