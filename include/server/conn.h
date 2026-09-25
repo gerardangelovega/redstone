@@ -1,11 +1,11 @@
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
 #include <stdint.h>
 // #include <vector>
 
 #include "server/buffer.h"
+#include "server/dlist.h"
 
 // Represents the length of the byte stream's header.
 constexpr uint32_t CONN_HEADER_LEN = 4;
@@ -22,10 +22,15 @@ struct Conn {
 
     Buffer incoming;  // buffer for incoming bytes from the socket
     Buffer outgoing; // buffer for outgoing bytes to the socket
+
+    uint64_t last_active_ms = 0;
+    DList idle_node;
 };
 Conn* handle_accept(int fd);
 void  handle_read(Conn* conn);
 void  handle_write(Conn* conn);
+
+void  conn_destroy(Conn* conn);
 
 // struct Response {
 //     uint32_t status = 0;

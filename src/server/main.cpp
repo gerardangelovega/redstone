@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdint>
 #include <errno.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -11,7 +12,9 @@
 #include <vector>
 
 #include "server/data.h"
+#include "server/dlist.h"
 #include "server/hashtable.h"
+#include "server/time.h"
 #include "server/zset.h"
 #include "shared/io.h"
 #include "shared/error.h"
@@ -47,6 +50,7 @@
 // }
 
 int main () {
+    dlist_init(&g_data.idle_list);
     /* Source: man socket.2
      * AF_INET      use IPv4 internet protocols
      *
@@ -95,7 +99,7 @@ int main () {
         die("listen()");
     }
 
-    std::vector<Conn *> fd2conn;
+    // std::vector<Conn *> fd2conn;
     std::vector<struct pollfd> poll_args;
 
     while (true) {
@@ -104,7 +108,7 @@ int main () {
         struct pollfd pfd = {fd, POLLIN, 0};
         poll_args.push_back(pfd);
 
-        for (Conn* conn : fd2conn) {
+        for (Conn* conn : g_data.fd2conn) {
             if (!conn) {
                 continue;
             }
@@ -129,11 +133,12 @@ int main () {
             poll_args.push_back(pfd);
         }
 
+        int32_t timeout_ms = next_timer_ms();
         /* Source: man poll.2
          * poll()   polls multiple file descriptors for events they want to monitor
          *          (e.g. error, ready to read, ready to write, & etc.)
          */
-        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), -1);
+        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), timeout_ms);
 
         /* Source: errno.h
          * EINTR    an error number returned by a syscall when it is interrupted
@@ -146,17 +151,20 @@ int main () {
         }
 
         if (poll_args[0].revents) {
-            if (Conn* conn = handle_accept(fd)) {
-                if (fd2conn.size() <= (size_t)conn->fd) {
-                    fd2conn.resize(conn->fd + 1);
-                }
-                fd2conn[conn->fd] = conn;
-            }
+            handle_accept(fd);
         }
 
         for (size_t i = 1; i < poll_args.size(); ++i) {
             uint32_t ready = poll_args[i].revents;
-            Conn* conn = fd2conn[poll_args[i].fd];
+            if (ready == 0) {
+                continue;
+            }
+            Conn* conn = g_data.fd2conn[poll_args[i].fd];
+
+            conn->last_active_ms = get_monotonic_ms();
+            dlist_detach(&conn->idle_node);
+            dlist_insert_before(&g_data.idle_list, &conn->idle_node);
+
             if (ready & POLLIN) {
                 handle_read(conn);
             }
@@ -164,11 +172,11 @@ int main () {
                 handle_write(conn);
             }
             if ((ready & POLLERR) || conn->want_close) {
-                (void)close(conn->fd);
-                fd2conn[conn->fd] = NULL;
-                delete conn;
+                conn_destroy(conn);
             }
         }
+
+        process_timers();
     }
 
     // while (true) {

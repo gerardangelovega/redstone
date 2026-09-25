@@ -12,7 +12,9 @@
 #include <unistd.h>
 #include <vector>
 
+#include "server/dlist.h"
 #include "server/serialize.h"
+#include "server/time.h"
 #include "shared/error.h"
 #include "shared/io.h"
 #include "shared/protocol.h"
@@ -202,6 +204,14 @@ Conn* handle_accept(int fd) {
     Conn* conn = new Conn();
     conn->fd = connfd;
     conn->want_read = true;
+    conn->last_active_ms = get_monotonic_ms();
+    dlist_insert_before(&g_data.idle_list, &conn->idle_node);
+
+    if (g_data.fd2conn.size() <= (size_t)conn->fd) {
+        g_data.fd2conn.resize(conn->fd + 1);
+    }
+    assert(!g_data.fd2conn[conn->fd]);
+    g_data.fd2conn[conn->fd] = conn;
 
     return conn;
 }
@@ -264,4 +274,11 @@ void handle_write(Conn* conn) {
         conn->want_read = true;
         conn->want_write = false;
     }
+}
+
+void conn_destroy(Conn* conn) {
+    (void)close(conn->fd);
+    g_data.fd2conn[conn->fd] = NULL;
+    dlist_detach(&conn->idle_node);
+    delete conn;
 }

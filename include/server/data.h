@@ -5,11 +5,15 @@
 #include <vector>
 
 #include "server/buffer.h"
+#include "server/conn.h"
+#include "server/dlist.h"
 #include "server/hashtable.h"
 #include "server/zset.h"
 
 struct Data {
     HMap db;
+    std::vector<Conn*> fd2conn;
+    DList idle_list;
 };
 
 extern struct Data g_data;
