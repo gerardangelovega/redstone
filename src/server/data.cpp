@@ -4,10 +4,12 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <pthread.h>
 
 #include "server/common.h"
 #include "server/heap.h"
 #include "server/serialize.h"
+#include "server/thread_pool.h"
 #include "server/time.h"
 #include "server/zset.h"
 #include "shared/io.h"
@@ -29,12 +31,31 @@ Entry* entry_new(uint32_t type) {
     return ent;
 }
 
-void entry_del(Entry* ent) {
+static void entry_del_sync(Entry* ent) {
+    printf("working from thread %lu\n", pthread_self());
     if (ent->type == T_ZSET) {
         zset_clear(&ent->zset);
     }
-    entry_set_ttl(ent, -1);
     delete ent;
+}
+
+static void entry_del_func(void* arg) {
+    entry_del_sync((Entry*)arg);
+}
+
+void entry_del(Entry* ent) {
+    printf("working from thread %lu\n", pthread_self());
+    entry_set_ttl(ent, -1);
+    size_t set_size = (ent->type == T_ZSET) ? hm_size(&ent->zset.hmap) : 0;
+    printf("size of container is %lu\n", set_size);
+    const size_t K_LARGE_CONTAINER_SIZE = 1000;
+    if (set_size > K_LARGE_CONTAINER_SIZE) {
+        printf("container exceeds size, delegating deletion to reaper thread...\n");
+        thread_pool_queue(&g_data.thread_pool, &entry_del_func, ent);
+    } else {
+        printf("deleting from the main thread\n");
+        entry_del_sync(ent);
+    }
 }
 
 bool entry_eq(HNode* lhs, HNode* rhs) {

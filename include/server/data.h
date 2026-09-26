@@ -10,6 +10,7 @@
 #include "server/dlist.h"
 #include "server/hashtable.h"
 #include "server/heap.h"
+#include "server/thread_pool.h"
 #include "server/zset.h"
 
 struct Data {
@@ -17,6 +18,7 @@ struct Data {
     std::vector<Conn*> fd2conn;
     DList idle_list;
     std::vector<HeapItem> heap;
+    ThreadPool thread_pool;
 };
 
 extern struct Data g_data;
@@ -41,6 +43,7 @@ struct Entry {
 
 Entry* entry_new(uint32_t type);
 bool entry_eq(HNode* lhs, HNode* rhs);
+// void entry_del_sync(Entry* ent);
 void entry_del(Entry* ent);
 void entry_set_ttl(Entry* ent, int64_t ttl_ms);
 bool cb_keys(HNode* node, void* arg);

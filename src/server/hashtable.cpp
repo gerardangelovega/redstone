@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 
 #include "server/hashtable.h"
@@ -113,6 +114,7 @@ void hm_clear(HMap* hmap) {
 }
 
 void hm_trigger_rehashing(HMap* hmap) {
+    printf("load factor exceeded, rehashing...\n");
     // copy the new table to the old table
     hmap->older = hmap->newer;
     // we modify the new table to have double the space and zero it out

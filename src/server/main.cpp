@@ -14,6 +14,7 @@
 #include "server/data.h"
 #include "server/dlist.h"
 #include "server/hashtable.h"
+#include "server/thread_pool.h"
 #include "server/time.h"
 #include "server/zset.h"
 #include "shared/io.h"
@@ -50,6 +51,7 @@
 // }
 
 int main () {
+    thread_pool_init(&g_data.thread_pool, 4);
     dlist_init(&g_data.idle_list);
     /* Source: man socket.2
      * AF_INET      use IPv4 internet protocols

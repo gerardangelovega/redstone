@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) !void {
         "src/server/serialize.cpp",
         "src/server/zset.cpp",
         "src/server/time.cpp",
+        "src/server/thread_pool.cpp",
         "src/server/heap.cpp",
     };
     const client_source_files: []const []const u8 = &.{
