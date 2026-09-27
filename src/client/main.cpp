@@ -1,6 +1,9 @@
+#include <arpa/inet.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <errno.h>
+#include <filesystem>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <stdio.h>
@@ -173,6 +176,10 @@ static int32_t read_res(int fd) {
 }
 
 int main (int argc, char *argv[]) {
+    const char* value = getenv("REDSTONE_HOST");
+    if (!value) {
+        value = "127.0.0.1";
+    }
     /* Source: man socket.2
      * AF_INET      use IPv4 internet protocols
      *
@@ -189,7 +196,15 @@ int main (int argc, char *argv[]) {
     struct sockaddr_in addr = {};
     addr.sin_family = AF_INET;                     // IPv4 Internet Protocol
     addr.sin_port = ntohs(1234);                   // Port 1234
-    addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK); // IP 127.0.0.1
+                                                   //
+    int rv = inet_pton(AF_INET, value, &addr.sin_addr); // IP 127.0.0.1
+    if (rv == 1) {
+        msg("inet_pton() successfully converted ip string");
+    } else if (rv == 0) {
+        die("inet_pton() invalid ip string");
+    } else {
+        die("inet_pton() inet_pton failed");
+    }
 
     /* Source: man connect.2
      * connect()    connects the file descriptor to an address
