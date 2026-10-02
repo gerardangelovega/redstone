@@ -23,6 +23,25 @@ pub fn main(_: std.process.Init) !void {
         };
         var client: network.Client = undefined;
         client.init(client_fd);
+        response(&client);
         defer client.deinit();
     }
+}
+
+fn response(client: *network.Client) void {
+    var buffer: [64]u8 = undefined;
+    const rv: usize = linux.read(client.fd, &buffer, buffer.len);
+    switch (linux.errno(rv)) {
+        .SUCCESS => {
+            if (rv == 0) return;
+        },
+        else => |errno| {
+            std.log.err("read() failed to read {s}", .{@tagName(errno)});
+            return;
+        },
+    }
+    std.log.debug("Client says: {s}", .{buffer[0..rv]});
+
+    const message: []const u8 = "world";
+    _ = linux.write(client.fd, message.ptr, message.len);
 }
