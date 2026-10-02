@@ -82,7 +82,7 @@ pub const Server = struct {
         };
     }
 
-    /// Destroys the `Server` struct by closing the file descriptor referencing the
+    /// Deinitializes the `Server` struct by closing the file descriptor referencing the
     /// non-blocking TCP socket and setting the `Server` state to `.closed` and the
     /// `Server` socket to -1
     pub fn deinit(self: *Server) void {
