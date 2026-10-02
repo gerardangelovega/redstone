@@ -21,9 +21,8 @@ pub fn main(_: std.process.Init) !void {
             error.RetryAccept => continue,
             else => return err,
         };
-        defer {
-            logging.client.info("closed a client connection: {d}", .{client_fd});
-            _ = linux.close(client_fd);
-        }
+        var client: network.Client = undefined;
+        client.init(client_fd);
+        defer client.deinit();
     }
 }
