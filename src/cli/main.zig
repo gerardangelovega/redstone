@@ -42,5 +42,23 @@ pub fn main(_: std.process.Init) !void {
         },
     }
 
-    shared.root();
+    request(fd);
+}
+
+fn request(fd: i32) void {
+    const message: []const u8 = "hello";
+    _ = linux.write(fd, message.ptr, message.len);
+
+    var buffer: [64]u8 = undefined;
+    const rv: usize = linux.read(fd, &buffer, buffer.len);
+    switch (linux.errno(rv)) {
+        .SUCCESS => {
+            if (rv == 0) return;
+        },
+        else => |errno| {
+            std.log.err("read() failed to read {s}", .{@tagName(errno)});
+            return;
+        },
+    }
+    std.log.debug("Server says: {s}", .{buffer[0..rv]});
 }
