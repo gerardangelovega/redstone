@@ -1,6 +1,5 @@
 const std = @import("std");
 const linux = std.os.linux;
-
 const shared = @import("shared");
 
 pub fn main(_: std.process.Init) !void {
@@ -42,23 +41,98 @@ pub fn main(_: std.process.Init) !void {
         },
     }
 
-    request(fd);
+    _ = request(fd, "hello");
 }
 
-fn request(fd: i32) void {
-    const message: []const u8 = "hello";
-    _ = linux.write(fd, message.ptr, message.len);
+fn request(fd: i32, message: []const u8) bool {
+    if (message.len > 4096) {
+        std.log.warn("message is too long", .{});
+        return false;
+    }
 
-    var buffer: [64]u8 = undefined;
-    const rv: usize = linux.read(fd, &buffer, buffer.len);
-    switch (linux.errno(rv)) {
-        .SUCCESS => {
-            if (rv == 0) return;
+    var write_buffer: [4 + 4096]u8 = undefined;
+    std.mem.writeInt(u32, write_buffer[0..4], @intCast(message.len), .big);
+    @memcpy(write_buffer[4 .. 4 + message.len], message);
+
+    var total = 4 + message.len;
+    if (!shared.io.blocking.write(fd, write_buffer[0..total])) {
+        std.log.warn("write() failed", .{});
+        return false;
+    }
+
+    var read_buffer: [4 + 4096]u8 = undefined;
+    switch (shared.io.blocking.read(fd, read_buffer[0..4])) {
+        .ok => {},
+        .eof => {
+            std.log.debug("client disconnected: res=eof", .{});
+            return false;
         },
-        else => |errno| {
-            std.log.err("read() failed to read {s}", .{@tagName(errno)});
-            return;
+        .failed => {
+            std.log.warn("read_full() failed: res=failed", .{});
+            return false;
         },
     }
-    std.log.debug("Server says: {s}", .{buffer[0..rv]});
+
+    const len: u32 = std.mem.readInt(u32, read_buffer[0..4], .big);
+    if (len > 4096) {
+        std.log.warn("message is too long: len={d}", .{len});
+        return false;
+    }
+
+    total = len + 4;
+    switch (shared.io.blocking.read(fd, read_buffer[4..total])) {
+        .ok => {},
+        .eof => {
+            std.log.debug("client disconnected: res=eof", .{});
+            return false;
+        },
+        .failed => {
+            std.log.warn("read_full() failed: res=failed", .{});
+            return false;
+        },
+    }
+
+    std.log.info("Server: {s}", .{read_buffer[4 .. len + 4]});
+
+    return true;
 }
+
+// fn read_full(fd: i32, buffer: []u8) bool {
+//     var offset: usize = 0;
+//     while (offset < buffer.len) {
+//         const rv: usize = linux.read(fd, buffer.ptr + offset, buffer.len - offset);
+//         switch (linux.errno(rv)) {
+//             .SUCCESS => {
+//                 if (rv == 0) {
+//                     std.log.warn("EOF", .{});
+//                     return false;
+//                 }
+//             },
+//             .INTR => continue,
+//             else => return false,
+//         }
+//         std.debug.assert(rv <= buffer.len - offset);
+//         offset = offset + rv;
+//     }
+//     return true;
+// }
+//
+// fn write_all(fd: i32, buffer: []u8) bool {
+//     var offset: usize = 0;
+//     while (offset < buffer.len) {
+//         const rv: usize = linux.write(fd, buffer.ptr + offset, buffer.len - offset);
+//         switch (linux.errno(rv)) {
+//             .SUCCESS => {
+//                 if (rv == 0) {
+//                     std.log.warn("EOF", .{});
+//                     return false;
+//                 }
+//             },
+//             .INTR => continue,
+//             else => return false,
+//         }
+//         std.debug.assert(rv <= buffer.len - offset);
+//         offset = offset + rv;
+//     }
+//     return true;
+// }
