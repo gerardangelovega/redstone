@@ -2,7 +2,9 @@ const std = @import("std");
 const linux = std.os.linux;
 const shared = @import("shared");
 
-pub fn main(_: std.process.Init) !void {
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+
     var rv: usize = 0;
 
     const fd: i32 = @intCast(
@@ -41,27 +43,55 @@ pub fn main(_: std.process.Init) !void {
         },
     }
 
-    _ = request(fd, "hello");
+    if (!send_request(fd, gpa, "hello once")) return;
+    if (!send_request(fd, gpa, "hello twice")) return;
+    if (!send_request(fd, gpa, "hello thrice")) return;
+
+    if (!receive_response(fd, gpa)) return;
+    if (!receive_response(fd, gpa)) return;
+    if (!receive_response(fd, gpa)) return;
 }
 
-fn request(fd: i32, message: []const u8) bool {
-    if (message.len > 4096) {
-        std.log.warn("message is too long", .{});
+fn send_request(fd: i32, gpa: std.mem.Allocator, body: []const u8) bool {
+    const io = shared.io;
+    const message = shared.protocol.message;
+
+    if (body.len > message.body_length_max) {
         return false;
     }
 
-    var write_buffer: [4 + 4096]u8 = undefined;
-    std.mem.writeInt(u32, write_buffer[0..4], @intCast(message.len), .big);
-    @memcpy(write_buffer[4 .. 4 + message.len], message);
+    var header: [message.header_length]u8 = undefined;
+    std.mem.writeInt(u32, &header, @intCast(body.len), .little);
 
-    var total = 4 + message.len;
-    if (!shared.io.blocking.write(fd, write_buffer[0..total])) {
-        std.log.warn("write() failed", .{});
+    var outgoing: std.ArrayList(u8) = .empty;
+    defer outgoing.deinit(gpa);
+    outgoing.ensureUnusedCapacity(gpa, message.header_length + body.len) catch |err| {
+        std.log.err(
+            "reserving outgoing memory for message failed: fd={d} error={}",
+            .{ fd, err },
+        );
         return false;
-    }
+    };
+    outgoing.appendSliceAssumeCapacity(&header);
+    outgoing.appendSliceAssumeCapacity(body);
 
-    var read_buffer: [4 + 4096]u8 = undefined;
-    switch (shared.io.blocking.read(fd, read_buffer[0..4])) {
+    return io.blocking.write(fd, outgoing.items);
+}
+
+fn receive_response(fd: i32, gpa: std.mem.Allocator) bool {
+    const io = shared.io;
+    const message = shared.protocol.message;
+
+    var incoming: std.ArrayList(u8) = .empty;
+    defer incoming.deinit(gpa);
+    incoming.appendNTimes(gpa, 0, message.header_length) catch |err| {
+        std.log.err(
+            "reserving incoming memory for header failed: fd={d} error={}",
+            .{ fd, err },
+        );
+        return false;
+    };
+    switch (io.blocking.read(fd, incoming.items[0..message.header_length])) {
         .ok => {},
         .eof => {
             std.log.debug("client disconnected: res=eof", .{});
@@ -73,14 +103,21 @@ fn request(fd: i32, message: []const u8) bool {
         },
     }
 
-    const len: u32 = std.mem.readInt(u32, read_buffer[0..4], .big);
-    if (len > 4096) {
-        std.log.warn("message is too long: len={d}", .{len});
+    const header = incoming.items[0..message.header_length];
+    const body_length: u32 = std.mem.readInt(u32, header, .little);
+    if (body_length > message.body_length_max) {
         return false;
     }
 
-    total = len + 4;
-    switch (shared.io.blocking.read(fd, read_buffer[4..total])) {
+    const message_length = message.header_length + body_length;
+    incoming.appendNTimes(gpa, 0, body_length) catch |err| {
+        std.log.err(
+            "reserving incoming memory for body failed: fd={d} error={}",
+            .{ fd, err },
+        );
+        return false;
+    };
+    switch (io.blocking.read(fd, incoming.items[message.header_length..message_length])) {
         .ok => {},
         .eof => {
             std.log.debug("client disconnected: res=eof", .{});
@@ -92,47 +129,7 @@ fn request(fd: i32, message: []const u8) bool {
         },
     }
 
-    std.log.info("Server: {s}", .{read_buffer[4 .. len + 4]});
+    std.log.info("Server: {s}", .{incoming.items[message.header_length..message_length]});
 
     return true;
 }
-
-// fn read_full(fd: i32, buffer: []u8) bool {
-//     var offset: usize = 0;
-//     while (offset < buffer.len) {
-//         const rv: usize = linux.read(fd, buffer.ptr + offset, buffer.len - offset);
-//         switch (linux.errno(rv)) {
-//             .SUCCESS => {
-//                 if (rv == 0) {
-//                     std.log.warn("EOF", .{});
-//                     return false;
-//                 }
-//             },
-//             .INTR => continue,
-//             else => return false,
-//         }
-//         std.debug.assert(rv <= buffer.len - offset);
-//         offset = offset + rv;
-//     }
-//     return true;
-// }
-//
-// fn write_all(fd: i32, buffer: []u8) bool {
-//     var offset: usize = 0;
-//     while (offset < buffer.len) {
-//         const rv: usize = linux.write(fd, buffer.ptr + offset, buffer.len - offset);
-//         switch (linux.errno(rv)) {
-//             .SUCCESS => {
-//                 if (rv == 0) {
-//                     std.log.warn("EOF", .{});
-//                     return false;
-//                 }
-//             },
-//             .INTR => continue,
-//             else => return false,
-//         }
-//         std.debug.assert(rv <= buffer.len - offset);
-//         offset = offset + rv;
-//     }
-//     return true;
-// }
