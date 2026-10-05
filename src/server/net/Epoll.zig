@@ -7,7 +7,7 @@ const common = @import("common.zig");
 /// Wrapper around the epoll related data and Linux syscalls
 const Epoll = @This();
 
-const Op = enum { add, mod, del };
+const Op = enum(u8) { add, mod, del };
 const max_events = 256;
 
 fd: i32,
@@ -122,7 +122,7 @@ pub fn wait(self: *Epoll, timeout_ms: i32) []const linux.epoll_event {
 /// failed but is still recoverable, and `@panic` if the program reaches an
 /// invalid and unrecoverable state.
 fn ctl(self: *const Epoll, op: Op, fd: i32, event: ?*linux.epoll_event) bool {
-    const epoll_op = switch (op) {
+    const epoll_op: u32 = switch (op) {
         .add => linux.EPOLL.CTL_ADD,
         .mod => linux.EPOLL.CTL_MOD,
         .del => linux.EPOLL.CTL_DEL,
