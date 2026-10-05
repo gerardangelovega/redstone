@@ -74,7 +74,7 @@ pub fn init(self: *Server) void {
         .{value},
     );
 
-    // common.fd_nonblocking(fd);
+    common.fd_nonblocking(fd);
 
     self.* = .{ .state = .initialized, .socket = fd, .port = 0 };
     log.info("server initialized", .{});
@@ -234,7 +234,7 @@ pub fn accept(self: *Server) ?i32 {
     };
     log.debug("accepted client connection: client_fd={d}", .{client_fd});
 
-    // common.fd_nonblocking(client_fd);
+    common.fd_nonblocking(client_fd);
 
     return client_fd;
 }
