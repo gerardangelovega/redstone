@@ -1,12 +1,12 @@
 const std = @import("std");
 const linux = std.os.linux;
-const log = std.log.scoped(.net_server);
+const log = std.log.scoped(.net_listener);
 
 const common = @import("common.zig");
 
-/// `Server` is an abstraction and encapsulation of data, socket operations, and file
-/// descriptor operations that compose a Server
-const Server = @This();
+/// `Listener` is an abstraction and encapsulation of data, socket operations, and file
+/// descriptor operations that compose a Listener
+const Listener = @This();
 
 const State = enum {
     uninitialized,
@@ -21,9 +21,9 @@ socket: i32 = -1,
 addr: [4]u8 = .{ 0, 0, 0, 0 },
 port: u16 = 0,
 
-/// Initializes the `Server` struct by creating and configuring a non-blocking TCP
-/// socket and setting the `Server` state to `.initialized`
-pub fn init(self: *Server) void {
+/// Initializes the `Listener` struct by creating and configuring a non-blocking TCP
+/// socket and setting the `Listener` state to `.initialized`
+pub fn init(self: *Listener) void {
     var rv: usize = linux.socket(
         linux.AF.INET,
         linux.SOCK.STREAM,
@@ -77,13 +77,13 @@ pub fn init(self: *Server) void {
     common.fd_nonblocking(fd);
 
     self.* = .{ .state = .initialized, .socket = fd, .port = 0 };
-    log.info("server initialized", .{});
+    log.info("listener initialized", .{});
 }
 
-/// Deinitializes the `Server` struct by closing the file descriptor referencing
-/// the non-blocking TCP socket and setting the `Server` state to `.closed`
-/// and the `Server` socket to -1
-pub fn deinit(self: *Server) void {
+/// Deinitializes the `Listener` struct by closing the file descriptor referencing
+/// the non-blocking TCP socket and setting the `Listener` state to `.closed`
+/// and the `Listener` socket to -1
+pub fn deinit(self: *Listener) void {
     std.debug.assert(self.state != .closed);
     std.debug.assert(self.state != .uninitialized);
     std.debug.assert(self.socket >= 0);
@@ -92,12 +92,12 @@ pub fn deinit(self: *Server) void {
 
     self.socket = -1;
     self.state = .closed;
-    log.info("server dinitialized", .{});
+    log.info("listener dinitialized", .{});
 }
 
-/// Binds the `Server` non-blocking TCP socket to a wildcard address (0.0.0.0) and
-/// to the specified port and sets the `Server` state to `.bound`
-pub fn bind(self: *Server, addr: [4]u8, port: u16) void {
+/// Binds the `Listener` non-blocking TCP socket to a wildcard address (0.0.0.0) and
+/// to the specified port and sets the `Listener` state to `.bound`
+pub fn bind(self: *Listener, addr: [4]u8, port: u16) void {
     std.debug.assert(self.state == .initialized);
 
     const address: linux.sockaddr.in = .{
@@ -147,14 +147,14 @@ pub fn bind(self: *Server, addr: [4]u8, port: u16) void {
     self.addr = addr;
     self.port = port;
     log.info(
-        "server bound to {d}.{d}.{d}.{d}:{d}",
+        "listener bound to {d}.{d}.{d}.{d}:{d}",
         .{ addr[0], addr[1], addr[2], addr[3], port },
     );
 }
 
-/// Configures the `Server` non-blocking TCP socket to listen for connections in
-/// its bound address and port and sets the `Server` state to `.listening`
-pub fn listen(self: *Server) void {
+/// Configures the `Listener` non-blocking TCP socket to listen for connections in
+/// its bound address and port and sets the `Listener` state to `.listening`
+pub fn listen(self: *Listener) void {
     std.debug.assert(self.state == .bound);
 
     const rv: usize = linux.listen(self.socket, linux.SOMAXCONN);
@@ -189,17 +189,17 @@ pub fn listen(self: *Server) void {
 
     self.state = .listening;
     log.info(
-        "server listening for connections on {d}.{d}.{d}.{d}:{d}",
+        "listener listening for connections on {d}.{d}.{d}.{d}:{d}",
         .{ self.addr[0], self.addr[1], self.addr[2], self.addr[3], self.port },
     );
 }
 
-/// Accepts a client requesting a connection to the `Server` socket and returns
+/// Accepts a client requesting a connection to the `Listener` socket and returns
 /// a file descriptor that references said client connection.
 ///
 /// Returns an `i32` representing an `fd` when a connection has been successfully
 /// accepted, returns `null` if no connection was accepted.
-pub fn accept(self: *Server) ?i32 {
+pub fn accept(self: *Listener) ?i32 {
     std.debug.assert(self.state == .listening);
 
     const rv: usize = linux.accept(self.socket, null, null);
