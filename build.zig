@@ -4,8 +4,14 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const shared_mod = b.addModule("shared", .{
-        .root_source_file = b.path("src/shared/root.zig"),
+    const protocol_mod = b.addModule("protocol", .{
+        .root_source_file = b.path("src/protocol/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const sys_mod = b.addModule("sys", .{
+        .root_source_file = b.path("src/sys/root.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -17,9 +23,10 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "shared", .module = shared_mod },
+                .{ .name = "protocol", .module = protocol_mod },
+                .{ .name = "sys", .module = sys_mod },
             },
-        })
+        }),
     });
     b.installArtifact(server_exe);
 
@@ -30,9 +37,10 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "shared", .module = shared_mod },
+                .{ .name = "protocol", .module = protocol_mod },
+                .{ .name = "sys", .module = sys_mod },
             },
-        })
+        }),
     });
     b.installArtifact(cli_exe);
 }
