@@ -1,8 +1,14 @@
+// standard library, library, and module imports
 const std = @import("std");
+const sys = @import("sys");
+
+// file imports
+const common = @import("common.zig");
+
+// aliases
 const linux = std.os.linux;
 const log = std.log.scoped(.net_epoll);
-
-const common = @import("common.zig");
+const posix = std.posix;
 
 /// Wrapper around the epoll related data and Linux syscalls
 const Epoll = @This();
@@ -16,24 +22,28 @@ events: [max_events]linux.epoll_event,
 /// Initializes the `Epoll` wrapper struct by creating an fd referring to an
 /// epoll instance with the epoll_create1() Linux syscall
 pub fn init(self: *Epoll) void {
-    const rv: usize = linux.epoll_create1(linux.EPOLL.CLOEXEC);
-    const fd: i32 = switch (linux.errno(rv)) {
-        .SUCCESS => @intCast(rv),
-        .MFILE => {
-            log.err("epoll_create1() failed: MFILE, process fd limit reached", .{});
+    const fd: i32 = sys.linux.epoll_create1(
+        linux.EPOLL.CLOEXEC,
+    ) catch |err| switch (err) {
+        error.ProcessFdLimitExceeded => {
+            const process_limit: ?posix.rlimit = posix.getrlimit(.NOFILE) catch null;
+            if (process_limit) |pl| {
+                log.err("socket() failed, {}: process limit is {d}", .{ err, pl.max });
+            } else {
+                log.err("socket() failed, {}: process limit is ?", .{err});
+            }
             std.process.exit(1);
         },
-        .NFILE => {
-            log.err("epoll_create1() failed: NFILE, system fd limit reached", .{});
+        error.SystemFdLimitExceeded => {
+            log.err("epoll_create1() failed, {}: check /proc/sys/fs/file-max", .{err});
             std.process.exit(1);
         },
-        .NOMEM => {
-            log.err("epoll_create1() failed: NOMEM, insufficient memory", .{});
+        error.SystemResourcesExhausted => {
+            log.err("epoll_create1() failed, {}: memory/socket buffers full", .{err});
             std.process.exit(1);
         },
-        else => |errno| {
-            log.err("epoll_create1() failed: errno={s}", .{@tagName(errno)});
-            @panic("epoll_create1() failed");
+        error.Unexpected => {
+            @panic("epoll_create1() falied, unexpected error");
         },
     };
     log.debug("epoll instance created: fd={d}", .{fd});
@@ -47,7 +57,12 @@ pub fn init(self: *Epoll) void {
 pub fn deinit(self: *Epoll) void {
     std.debug.assert(self.fd >= 0);
 
-    common.fd_close(self.fd);
+    sys.linux.close(self.fd) catch |err| switch (err) {
+        error.Interrupted => {},
+        error.Unexpected => {
+            @panic("close() failed, unexpected error");
+        },
+    };
 
     self.fd = -1;
     log.info("epoll instance deinitialized", .{});
@@ -92,27 +107,20 @@ pub fn delete(self: *const Epoll, fd: i32) void {
 ///
 /// *(the returned slice is only valid until the next `Epoll`.`wait()`)*
 pub fn wait(self: *Epoll, timeout_ms: i32) []const linux.epoll_event {
-    const rv: usize = linux.epoll_wait(
+    const event_count: usize = sys.linux.epoll_wait(
         self.fd,
         &self.events,
         max_events,
         timeout_ms,
-    );
-    switch (linux.errno(rv)) {
-        .SUCCESS => {
-            return self.events[0..rv];
-        },
-        .INTR => {
+    ) catch |err| switch (err) {
+        error.Interrupted => {
             return self.events[0..0];
         },
-        else => |errno| {
-            log.err(
-                "epoll_wait() failed: epfd={d} maxevents={d} errno={s}",
-                .{ self.fd, max_events, @tagName(errno) },
-            );
-            @panic("epoll_wait() failed");
+        error.Unexpected => {
+            @panic("epoll_wait() failed, unexpected error");
         },
-    }
+    };
+    return self.events[0..event_count];
 }
 
 /// Abstracts `epoll_ctl` `CTL_ADD`, `CTL_MOD`, and `CTL_DEL` operations into a
@@ -127,43 +135,42 @@ fn ctl(self: *const Epoll, op: Op, fd: i32, event: ?*linux.epoll_event) bool {
         .mod => linux.EPOLL.CTL_MOD,
         .del => linux.EPOLL.CTL_DEL,
     };
-    const rv = linux.epoll_ctl(self.fd, epoll_op, fd, event);
-    switch (linux.errno(rv)) {
-        .SUCCESS => {
-            return true;
-        },
-        .NOMEM => switch (op) {
+    sys.linux.epoll_ctl(self.fd, epoll_op, fd, event) catch |err| switch (err) {
+        error.SystemResourcesExhausted => switch (op) {
             .add => {
-                log.warn("epoll_ctl(add) failed: NOMEM, insufficient memory", .{});
+                log.err("epoll_ctl(CTL_ADD) failed, {}: memory full", .{err});
                 return false;
             },
             else => {
                 log.err(
-                    "epoll_ctl({s}) failed: NOMEM, insufficient memory",
+                    "epoll_ctl({s}) failed, {}: memory full",
+                    .{ @tagName(op), err },
+                );
+                std.debug.panic(
+                    "epoll_ctl({s}) failed",
                     .{@tagName(op)},
                 );
-                @panic("epoll_ctl() failed");
             },
         },
-        .NOSPC => switch (op) {
+        error.EpollUserWatchLimitExceeded => switch (op) {
             .add => {
-                log.warn("epoll_ctl(add) failed: NOSPC, watched limit reached", .{});
+                log.err("epoll_ctl(CTL_ADD) failed, {}", .{err});
                 return false;
             },
             else => {
                 log.err(
-                    "epoll_ctl({s}) failed: NOSPC, watched limit reached",
+                    "epoll_ctl({s}) failed, {}",
+                    .{ @tagName(op), err },
+                );
+                std.debug.panic(
+                    "epoll_ctl({s}) failed",
                     .{@tagName(op)},
                 );
-                @panic("epoll_ctl() failed");
             },
         },
-        else => |errno| {
-            log.err(
-                "epoll_ctl() failed: op={s} fd={d} epfd={d} errno={s}",
-                .{ @tagName(op), fd, self.fd, @tagName(errno) },
-            );
+        error.Unexpected => {
             @panic("epoll_ctl() failed");
         },
-    }
+    };
+    return true;
 }

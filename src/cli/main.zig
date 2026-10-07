@@ -1,31 +1,53 @@
+// standard library, library, and module imports
 const std = @import("std");
+const protocol = @import("protocol");
+const sys = @import("sys");
+
+// files
+const io = @import("io.zig");
+
+// aliases
+const Allocator = std.mem.Allocator;
 const linux = std.os.linux;
-const shared = @import("shared");
+const log = std.log;
+
+// TODO2: extract and abstract connection and request-response logic into struct
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
 
     var rv: usize = 0;
 
-    const fd: i32 = @intCast(
-        linux.socket(
-            linux.AF.INET,
-            linux.SOCK.STREAM,
-            linux.IPPROTO.TCP,
-        ),
-    );
-    switch (linux.errno(rv)) {
-        .SUCCESS => {},
-        else => |errno| {
-            std.log.err(
-                "socket() failed: {s}",
-                .{@tagName(errno)},
-            );
-            return error.SocketFailed;
+    const fd: i32 = sys.linux.socket(
+        linux.AF.INET,
+        linux.SOCK.STREAM,
+        linux.IPPROTO.TCP,
+    ) catch |err| switch (err) {
+        error.ProcessFdLimitExceeded => {
+            log.err("socket() failed: {}: process limit is ?", .{err});
+            std.process.exit(1);
         },
-    }
-    defer _ = linux.close(fd);
+        error.SystemFdLimitExceeded => {
+            log.err("socket() failed: {}: check /proc/sys/fs/file-max", .{err});
+            std.process.exit(1);
+        },
+        error.SystemResourcesExhausted => {
+            log.err("socket() failed: {}: memory/socket buffers full", .{err});
+            std.process.exit(1);
+        },
+        error.Unexpected => {
+            @panic("socket() falied, unexpected error");
+        },
+    };
 
+    defer sys.linux.close(fd) catch |err| switch (err) {
+        error.Interrupted => {},
+        error.Unexpected => {
+            @panic("close() failed, unexpected error");
+        },
+    };
+
+    // TODO2: refactor implementation using connect() syscall wrapper
     const address: linux.sockaddr.in = .{
         .family = linux.AF.INET,
         .port = std.mem.nativeTo(u16, 6767, .big),
@@ -52,20 +74,17 @@ pub fn main(init: std.process.Init) !void {
     if (!receive_response(fd, gpa)) return;
 }
 
-fn send_request(fd: i32, gpa: std.mem.Allocator, body: []const u8) bool {
-    const io = shared.io;
-    const message = shared.protocol.message;
-
-    if (body.len > message.body_length_max) {
+fn send_request(fd: i32, gpa: Allocator, body: []const u8) bool {
+    if (body.len > protocol.body_length_max) {
         return false;
     }
 
-    var header: [message.header_length]u8 = undefined;
+    var header: [protocol.header_length_fixed]u8 = undefined;
     std.mem.writeInt(u32, &header, @intCast(body.len), .little);
 
     var outgoing: std.ArrayList(u8) = .empty;
     defer outgoing.deinit(gpa);
-    outgoing.ensureUnusedCapacity(gpa, message.header_length + body.len) catch |err| {
+    outgoing.ensureUnusedCapacity(gpa, protocol.header_length_fixed + body.len) catch |err| {
         std.log.err(
             "reserving outgoing memory for message failed: fd={d} error={}",
             .{ fd, err },
@@ -78,20 +97,17 @@ fn send_request(fd: i32, gpa: std.mem.Allocator, body: []const u8) bool {
     return io.blocking.write(fd, outgoing.items);
 }
 
-fn receive_response(fd: i32, gpa: std.mem.Allocator) bool {
-    const io = shared.io;
-    const message = shared.protocol.message;
-
+fn receive_response(fd: i32, gpa: Allocator) bool {
     var incoming: std.ArrayList(u8) = .empty;
     defer incoming.deinit(gpa);
-    incoming.appendNTimes(gpa, 0, message.header_length) catch |err| {
+    incoming.appendNTimes(gpa, 0, protocol.header_length_fixed) catch |err| {
         std.log.err(
             "reserving incoming memory for header failed: fd={d} error={}",
             .{ fd, err },
         );
         return false;
     };
-    switch (io.blocking.read(fd, incoming.items[0..message.header_length])) {
+    switch (io.blocking.read(fd, incoming.items[0..protocol.header_length_fixed])) {
         .ok => {},
         .eof => {
             std.log.debug("client disconnected: res=eof", .{});
@@ -103,13 +119,13 @@ fn receive_response(fd: i32, gpa: std.mem.Allocator) bool {
         },
     }
 
-    const header = incoming.items[0..message.header_length];
+    const header = incoming.items[0..protocol.header_length_fixed];
     const body_length: u32 = std.mem.readInt(u32, header, .little);
-    if (body_length > message.body_length_max) {
+    if (body_length > protocol.body_length_max) {
         return false;
     }
 
-    const message_length = message.header_length + body_length;
+    const message_length = protocol.header_length_fixed + body_length;
     incoming.appendNTimes(gpa, 0, body_length) catch |err| {
         std.log.err(
             "reserving incoming memory for body failed: fd={d} error={}",
@@ -117,7 +133,7 @@ fn receive_response(fd: i32, gpa: std.mem.Allocator) bool {
         );
         return false;
     };
-    switch (io.blocking.read(fd, incoming.items[message.header_length..message_length])) {
+    switch (io.blocking.read(fd, incoming.items[protocol.header_length_fixed..message_length])) {
         .ok => {},
         .eof => {
             std.log.debug("client disconnected: res=eof", .{});
@@ -129,7 +145,7 @@ fn receive_response(fd: i32, gpa: std.mem.Allocator) bool {
         },
     }
 
-    std.log.info("Server: {s}", .{incoming.items[message.header_length..message_length]});
+    std.log.info("Server: {s}", .{incoming.items[protocol.header_length_fixed..message_length]});
 
     return true;
 }

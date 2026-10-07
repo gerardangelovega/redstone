@@ -1,9 +1,14 @@
+// standard library, library, and module imports
 const std = @import("std");
-const linux = std.os.linux;
-const shared = @import("shared");
+const sys = @import("sys");
 
-const net = @import("net.zig");
+// file imports
 const EventLoop = @import("EventLoop.zig");
+const net = @import("net.zig");
+
+// aliases
+const linux = std.os.linux;
+const log = std.log;
 
 pub const std_options: std.Options = .{
     .log_level = .debug,
