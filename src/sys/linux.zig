@@ -2,6 +2,7 @@
 const std = @import("std");
 
 // aliases
+const assert = @import("assert");
 const linux = std.os.linux;
 const log = std.log.scoped(.sys_linux);
 
@@ -46,6 +47,9 @@ const SetSockOptError = error{
 /// Wrapper around the `setsockopt()` syscall for more erogonomic and convenient
 /// handling of errors and to provide a simpler interface for the syscall.
 pub fn setsockopt(fd: i32, level: i32, optname: u32, val: u32) SetSockOptError!void {
+    assert.cheap(fd >= 0);
+    assert.cheap(level >= 0);
+
     const optval = &std.mem.toBytes(val);
     const ret: usize = linux.setsockopt(fd, level, optname, optval, optval.len);
     switch (linux.errno(ret)) {
@@ -70,6 +74,9 @@ const FcntlError = error{
 ///
 /// Returns a `u32` value that may represent status code or fd flags.
 pub fn fcntl(fd: i32, cmd: i32, arg: usize) FcntlError!u32 {
+    assert.cheap(fd >= 0);
+    assert.cheap(cmd >= 0);
+
     const ret: usize = linux.fcntl(fd, cmd, arg);
     switch (linux.errno(ret)) {
         .SUCCESS => {
@@ -94,6 +101,8 @@ const BindError = error{
 /// Wrapper around the `bind()` syscall for more erogonomic and convenient handling
 /// of errors.
 pub fn bind(fd: i32, addr: *const linux.sockaddr.in) BindError!void {
+    assert.cheap(fd >= 0);
+
     const ret: usize = linux.bind(fd, @ptrCast(addr), @sizeOf(linux.sockaddr.in));
     switch (linux.errno(ret)) {
         .SUCCESS => {
@@ -125,6 +134,8 @@ const ListenError = error{
 /// Wrapper around the `listen()` syscall for more erogonomic and convenient handling
 /// of errors.
 pub fn listen(fd: i32, backlog: u32) ListenError!void {
+    assert.cheap(fd >= 0);
+
     const ret: usize = linux.listen(fd, backlog);
     switch (linux.errno(ret)) {
         .SUCCESS => {
@@ -153,10 +164,13 @@ const AcceptError = error{
     Unexpected,
 };
 /// Wrapper around the `accept()` syscall for more erogonomic and convenient
-/// handling of errors and to provide a simpler interface for the syscall.
+/// handling of errors and return values, and to provide a simpler interface for the
+/// syscall.
 ///
 /// Returns an `i32` value representing an fd.
 pub fn accept(fd: i32, addr: ?*linux.sockaddr) AcceptError!i32 {
+    assert.cheap(fd >= 0);
+
     var len: u32 = if (addr != null) @sizeOf(linux.sockaddr) else 0;
     const len_ptr: ?*u32 = if (addr != null) &len else null;
 
@@ -193,28 +207,130 @@ pub fn accept(fd: i32, addr: ?*linux.sockaddr) AcceptError!i32 {
     }
 }
 
-// TODO2: implement accept4() syscall wrapper and replace accept() usage with accept4()
+const Accept4Error = AcceptError;
+/// Wrapper around the `accept4()` syscall for more erogonomic and convenient
+/// handling of errors and return values, and to provide a simpler interface for the
+/// syscall.
+///
+/// Returns an `i32` value representing an fd.
+pub fn accept4(fd: i32, addr: ?*linux.sockaddr, flags: u32) Accept4Error!i32 {
+    assert.cheap(fd >= 0);
 
-// TODO2: document purpose of function
-// TODO2: move Unexpected inside of error set
+    var len: u32 = if (addr != null) @sizeOf(linux.sockaddr) else 0;
+    const len_ptr: ?*u32 = if (addr != null) &len else null;
+
+    const ret: usize = linux.accept4(fd, addr, len_ptr, flags);
+    switch (linux.errno(ret)) {
+        .SUCCESS => {
+            return @intCast(ret);
+        },
+        .INTR => {
+            return error.Interrupted;
+        },
+        .AGAIN => {
+            return error.WouldBlock;
+        },
+        .CONNABORTED => {
+            return error.ConnectionAborted;
+        },
+        .MFILE => {
+            return error.ProcessFdLimitExceeded;
+        },
+        .NFILE => {
+            return error.SystemFdLimitExceeded;
+        },
+        .NOBUFS, .NOMEM => {
+            return error.SystemResourcesExhausted;
+        },
+        else => |errno| {
+            log.err(
+                "accept4() syscall failed: fd={d}, errno={s}",
+                .{ fd, @tagName(errno) },
+            );
+            return error.Unexpected;
+        },
+    }
+}
+
 const ConnectError = error{
+    Interrupted,
+    WouldBlock,
+    PermissionDenied,
+    AddressInUse,
+    AddressNotAvailable,
+    ConnectionRefusedByPeer,
+    ConnectionPending,
+    ConnectedAlready,
+    ConnectionTimedOut,
+    NetworkUnreachable,
     Unexpected,
 };
-// TODO2: implement connect() syscall wrapper function
+/// Wrapper around the `connect()` syscall for more erogonomic and convenient
+/// handling of errors and return values, and to provide a simpler interface for the
+/// syscall.
+pub fn connect(fd: i32, addr: *const linux.sockaddr.in) ConnectError!void {
+    assert.cheap(fd >= 0);
+
+    const ret: usize = linux.connect(fd, @ptrCast(addr), @sizeOf(linux.sockaddr.in));
+    switch (linux.errno(ret)) {
+        .SUCCESS => {
+            return;
+        },
+        .INTR => {
+            return error.Interrupted;
+        },
+        .AGAIN => {
+            return error.WouldBlock;
+        },
+        .ACCES, .PERM => {
+            return error.PermissionDenied;
+        },
+        .ADDRINUSE => {
+            return error.AddressInUse;
+        },
+        .ADDRNOTAVAIL => {
+            return error.AddressNotAvailable;
+        },
+        .CONNREFUSED => {
+            return error.ConnectionRefusedByPeer;
+        },
+        .ALREADY, .INPROGRESS => {
+            return error.ConnectionPending;
+        },
+        .ISCONN => {
+            return error.ConnectedAlready;
+        },
+        .TIMEDOUT => {
+            return error.ConnectionTimedOut;
+        },
+        .NETUNREACH => {
+            return error.NetworkUnreachable;
+        },
+        else => |errno| {
+            log.err(
+                "connect() syscall failed: fd={d} errno={s}",
+                .{ fd, @tagName(errno) },
+            );
+            return error.Unexpected;
+        },
+    }
+}
 
 const ReadError = error{
     EndOfStream,
     WouldBlock,
     Interrupted,
-    ConnectionResetByPeer,
     Unexpected,
 };
 /// Wrapper around the `read()` syscall for more erogonomic and convenient
 /// handling of errors and return values.
 ///
 /// Returns a `usize` value that can be used for indexing or slicing
-pub fn read(fd: i32, buf: [*]u8, count: usize) ReadError!usize {
-    const ret: usize = linux.read(fd, buf, count);
+pub fn read(fd: i32, buffer_out: []u8) ReadError!usize {
+    assert.cheap(fd >= 0);
+    assert.cheap(buffer_out.len > 0);
+
+    const ret: usize = linux.read(fd, buffer_out.ptr, buffer_out.len);
     switch (linux.errno(ret)) {
         .SUCCESS => {
             if (ret == 0) return error.EndOfStream;
@@ -225,9 +341,6 @@ pub fn read(fd: i32, buf: [*]u8, count: usize) ReadError!usize {
         },
         .INTR => {
             return error.Interrupted;
-        },
-        .CONNRESET => {
-            return error.ConnectionResetByPeer;
         },
         else => |errno| {
             log.err(
@@ -243,15 +356,17 @@ const WriteError = error{
     WouldBlock,
     Interrupted,
     BrokenPipe,
-    ConnectionResetByPeer,
     Unexpected,
 };
 /// Wrapper around the `write()` syscall for more erogonomic and convenient
 /// handling of errors and return values.
 ///
 /// Returns a `usize` value that can be used for indexing or slicing
-pub fn write(fd: i32, buf: [*]const u8, count: usize) WriteError!usize {
-    const ret: usize = linux.write(fd, buf, count);
+pub fn write(fd: i32, buffer_in: []const u8) WriteError!usize {
+    assert.cheap(fd >= 0);
+    assert.cheap(buffer_in.len > 0);
+
+    const ret: usize = linux.write(fd, buffer_in.ptr, buffer_in.len);
     switch (linux.errno(ret)) {
         .SUCCESS => {
             return ret;
@@ -265,9 +380,6 @@ pub fn write(fd: i32, buf: [*]const u8, count: usize) WriteError!usize {
         .PIPE => {
             return error.BrokenPipe;
         },
-        .CONNRESET => {
-            return error.ConnectionResetByPeer;
-        },
         else => |errno| {
             log.err(
                 "write() syscall failed: fd={d} errno={s}",
@@ -278,8 +390,117 @@ pub fn write(fd: i32, buf: [*]const u8, count: usize) WriteError!usize {
     }
 }
 
-// TODO2: Implement recv() syscall wrapper and replace read() usage with recv()
-// TODO2: Implement send() syscall wrapper and replace write() usage with send()
+const RecvError = error{
+    EndOfStream,
+    WouldBlock,
+    Interrupted,
+    SystemResourcesExhausted,
+    ConnectionResetByPeer,
+    ConnectionRefusedByPeer,
+    Unexpected,
+};
+/// Wrapper around the `recv()` syscall for more erogonomic and convenient
+/// handling of errors and return values.
+///
+/// Returns a `usize` value that can be used for indexing or slicing
+pub fn recv(fd: i32, buffer_out: []u8, flags: u32) RecvError!usize {
+    assert.cheap(fd >= 0);
+    assert.cheap(buffer_out.len > 0);
+
+    const ret: usize = linux.recvfrom(
+        fd,
+        buffer_out.ptr,
+        buffer_out.len,
+        flags,
+        null,
+        null,
+    );
+    switch (linux.errno(ret)) {
+        .SUCCESS => {
+            if (ret == 0) return error.EndOfStream;
+            return ret;
+        },
+        .AGAIN => {
+            return error.WouldBlock;
+        },
+        .INTR => {
+            return error.Interrupted;
+        },
+        .NOMEM => {
+            return error.SystemResourcesExhausted;
+        },
+        .CONNRESET => {
+            return error.ConnectionResetByPeer;
+        },
+        .CONNREFUSED => {
+            return error.ConnectionRefusedByPeer;
+        },
+        else => |errno| {
+            log.err(
+                "read() syscall failed: fd={d} errno={s}",
+                .{ fd, @tagName(errno) },
+            );
+            return error.Unexpected;
+        },
+    }
+}
+
+const SendError = error{
+    WouldBlock,
+    Interrupted,
+    SystemResourcesExhausted,
+    BrokenPipe,
+    ConnectionResetByPeer,
+    ConnectionRefusedByPeer,
+    Unexpected,
+};
+/// Wrapper around the `send()` syscall for more erogonomic and convenient
+/// handling of errors and return values.
+///
+/// Returns a `usize` value that can be used for indexing or slicing
+pub fn send(fd: i32, buffer_in: []const u8, flags: u32) SendError!usize {
+    assert.cheap(fd >= 0);
+    assert.cheap(buffer_in.len > 0);
+
+    const ret: usize = linux.sendto(
+        fd,
+        buffer_in.ptr,
+        buffer_in.len,
+        flags,
+        null,
+        0,
+    );
+    switch (linux.errno(ret)) {
+        .SUCCESS => {
+            return ret;
+        },
+        .AGAIN => {
+            return error.WouldBlock;
+        },
+        .INTR => {
+            return error.Interrupted;
+        },
+        .PIPE => {
+            return error.BrokenPipe;
+        },
+        .NOMEM => {
+            return error.SystemResourcesExhausted;
+        },
+        .CONNRESET => {
+            return error.ConnectionResetByPeer;
+        },
+        .CONNREFUSED => {
+            return error.ConnectionRefusedByPeer;
+        },
+        else => |errno| {
+            log.err(
+                "write() syscall failed: fd={d} errno={s}",
+                .{ fd, @tagName(errno) },
+            );
+            return error.Unexpected;
+        },
+    }
+}
 
 const EpollCreate1Error = error{
     ProcessFdLimitExceeded,
@@ -330,6 +551,8 @@ pub fn epoll_wait(
     maxevents: u32,
     timeout: i32,
 ) EpollWaitError!usize {
+    assert.cheap(epoll_fd >= 0);
+
     const ret: usize = linux.epoll_wait(epoll_fd, events, maxevents, timeout);
     switch (linux.errno(ret)) {
         .SUCCESS => {
@@ -361,6 +584,12 @@ pub fn epoll_ctl(
     fd: i32,
     ev: ?*linux.epoll_event,
 ) EpollCtlError!void {
+    assert.cheap(epoll_fd >= 0);
+    assert.cheap(fd >= 0);
+    assert.cheap(epoll_fd != fd);
+    if (op == linux.EPOLL.CTL_ADD) assert.cheap(ev != null);
+    if (op == linux.EPOLL.CTL_MOD) assert.cheap(ev != null);
+
     const ret: usize = linux.epoll_ctl(epoll_fd, op, fd, ev);
     switch (linux.errno(ret)) {
         .SUCCESS => {
@@ -389,6 +618,8 @@ const CloseError = error{
 /// Wrapper around the `close()` syscall for more erogonomic and convenient
 /// handling of errors.
 pub fn close(fd: i32) CloseError!void {
+    assert.cheap(fd >= 0);
+
     const ret: usize = linux.close(fd);
     switch (linux.errno(ret)) {
         .SUCCESS => {

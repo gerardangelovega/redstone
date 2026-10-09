@@ -3,7 +3,7 @@ const std = @import("std");
 const sys = @import("sys");
 
 // file imports
-const common = @import("common.zig");
+const assert = @import("assert");
 
 // aliases
 const linux = std.os.linux;
@@ -22,17 +22,16 @@ const State = enum {
     closed,
 };
 
-state: State = .uninitialized,
 socket: i32 = -1,
 addr: [4]u8 = .{ 0, 0, 0, 0 },
 port: u16 = 0,
+state: State = .uninitialized,
 
-/// Initializes the `Listener` struct by creating and configuring a non-blocking TCP
-/// socket and setting the `Listener` state to `.initialized`
+/// Initializes an existing `Listener` instance.
 pub fn init(self: *Listener) void {
-    const fd: i32 = sys.linux.socket(
+    const socket_fd: i32 = sys.linux.socket(
         linux.AF.INET,
-        linux.SOCK.STREAM,
+        linux.SOCK.STREAM | linux.SOCK.NONBLOCK,
         linux.IPPROTO.TCP,
     ) catch |err| switch (err) {
         error.ProcessFdLimitExceeded => {
@@ -56,10 +55,10 @@ pub fn init(self: *Listener) void {
             @panic("socket() falied, unexpected error");
         },
     };
-    log.debug("created TCP socket: fd={d}", .{fd});
+    log.debug("created TCP socket: fd={d}", .{socket_fd});
 
     sys.linux.setsockopt(
-        fd,
+        socket_fd,
         linux.SOL.SOCKET,
         linux.SO.REUSEADDR,
         1,
@@ -70,24 +69,18 @@ pub fn init(self: *Listener) void {
     };
     log.debug("set TCP socket options: level=SOL.SOCKET opt=SO.REUSEADDR val=1", .{});
 
-    common.fd_nonblocking(fd) catch |err| switch (err) {
-        error.Unexpected => {
-            @panic("fd_nonblocking() failed, unexpected error");
-        },
-    };
-
-    self.* = .{ .state = .initialized, .socket = fd, .port = 0 };
+    self.* = .{ .state = .initialized, .socket = socket_fd, .port = 0 };
 
     log.info("listener initialized", .{});
+
+    assert.expensive(assert_fd_is_nonblock, .{socket_fd});
 }
 
-/// Deinitializes the `Listener` struct by closing the file descriptor referencing
-/// the non-blocking TCP socket and setting the `Listener` state to `.closed`
-/// and the `Listener` socket to -1
+/// Deinitializes a `Listener` instance.
 pub fn deinit(self: *Listener) void {
-    std.debug.assert(self.state != .closed);
-    std.debug.assert(self.state != .uninitialized);
-    std.debug.assert(self.socket >= 0);
+    assert.cheap(self.state != .closed);
+    assert.cheap(self.state != .uninitialized);
+    assert.cheap(self.socket >= 0);
 
     sys.linux.close(self.socket) catch |err| switch (err) {
         error.Interrupted => {},
@@ -103,17 +96,17 @@ pub fn deinit(self: *Listener) void {
     log.info("listener dinitialized", .{});
 }
 
-/// Binds the `Listener` non-blocking TCP socket to a wildcard address (0.0.0.0) and
-/// to the specified port and sets the `Listener` state to `.bound`
+/// Binds the `Listener` instance's non-blocking TCP socket to the provided address and
+/// port.
 pub fn bind(self: *Listener, addr: [4]u8, port: u16) void {
-    std.debug.assert(self.state == .initialized);
+    assert.cheap(self.state == .initialized);
 
-    const address: linux.sockaddr.in = .{
+    const socket_address: linux.sockaddr.in = .{
         .family = linux.AF.INET,
         .port = std.mem.nativeTo(u16, port, .big),
         .addr = @bitCast(addr),
     };
-    sys.linux.bind(self.socket, &address) catch |err| switch (err) {
+    sys.linux.bind(self.socket, &socket_address) catch |err| switch (err) {
         error.PermissionDenied, error.AddressInUse, error.AddressNotAvailable => {
             log.err(
                 "bind() failed, {}: address={d}.{d}.{d}.{d}:{d}",
@@ -140,10 +133,10 @@ pub fn bind(self: *Listener, addr: [4]u8, port: u16) void {
     );
 }
 
-/// Configures the `Listener` non-blocking TCP socket to listen for connections in
-/// its bound address and port and sets the `Listener` state to `.listening`
+/// Configures the `Listener` instance's non-blocking TCP socket to listen for
+/// connection requests from its bound address and port.
 pub fn listen(self: *Listener) void {
-    std.debug.assert(self.state == .bound);
+    assert.cheap(self.state == .bound);
 
     const addr = self.addr;
     const port = self.port;
@@ -172,15 +165,21 @@ pub fn listen(self: *Listener) void {
     );
 }
 
-/// Accepts a client requesting a connection to the `Listener` socket and returns
-/// a file descriptor that references said client connection.
+/// Accepts a connection request from the `Listener` instance's TCP socket and returns
+/// a file descriptor referencing the client connection.
 ///
-/// Returns an `i32` representing an `fd` when a connection has been successfully
-/// accepted, returns `null` if no connection was accepted.
+/// Returns the following:
+/// - an `i32` value representing an `fd` when a connection request has been
+/// accepted.
+/// - a `null` if no connection was accepted.
 pub fn accept(self: *Listener) ?i32 {
-    std.debug.assert(self.state == .listening);
+    assert.cheap(self.state == .listening);
 
-    const fd: i32 = sys.linux.accept(self.socket, null) catch |err| switch (err) {
+    const connection_fd: i32 = sys.linux.accept4(
+        self.socket,
+        null,
+        linux.SOCK.NONBLOCK,
+    ) catch |err| switch (err) {
         error.Interrupted, error.WouldBlock, error.ConnectionAborted => {
             return null;
         },
@@ -205,13 +204,20 @@ pub fn accept(self: *Listener) ?i32 {
             @panic("accept() falied, unexpected error");
         },
     };
-    log.debug("accepted client connection: client_fd={d}", .{fd});
+    log.debug("accepted client connection: client_fd={d}", .{connection_fd});
 
-    common.fd_nonblocking(fd) catch |err| switch (err) {
+    assert.expensive(assert_fd_is_nonblock, .{connection_fd});
+
+    return connection_fd;
+}
+
+/// Debug only assertion callback to assert that an fd is set to non-blocking.
+fn assert_fd_is_nonblock(fd: i32) bool {
+    const flags: u32 = sys.linux.fcntl(fd, linux.F.GETFL, 0) catch |err| switch (err) {
         error.Unexpected => {
-            @panic("fd_nonblocking() failed, unexpected error");
+            @panic("fcntl(F_GETFL) failed: unexpected error");
         },
     };
-
-    return fd;
+    const nonblock: u32 = @bitCast(linux.O{ .NONBLOCK = true });
+    return (flags & nonblock) != 0;
 }
