@@ -4,8 +4,14 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const assert_mod = b.addModule("assert", .{
+        .root_source_file = b.path("src/assert.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const protocol_mod = b.addModule("protocol", .{
-        .root_source_file = b.path("src/protocol/root.zig"),
+        .root_source_file = b.path("src/protocol.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -14,6 +20,9 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/sys/root.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "assert", .module = assert_mod },
+        },
     });
 
     const server_exe = b.addExecutable(.{
@@ -23,6 +32,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
+                .{ .name = "assert", .module = assert_mod },
                 .{ .name = "protocol", .module = protocol_mod },
                 .{ .name = "sys", .module = sys_mod },
             },
@@ -37,6 +47,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
+                .{ .name = "assert", .module = assert_mod },
                 .{ .name = "protocol", .module = protocol_mod },
                 .{ .name = "sys", .module = sys_mod },
             },
