@@ -19,6 +19,6 @@ pub fn main(init: std.process.Init) !void {
 
     var event_loop: EventLoop = undefined;
     event_loop.init(gpa);
-    defer event_loop.deinit(gpa);
     event_loop.run(gpa);
+    event_loop.deinit(gpa);
 }
