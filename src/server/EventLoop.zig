@@ -215,6 +215,8 @@ fn handle_client(self: *EventLoop, gpa: Allocator, client_fd: i32, events: u32) 
     }
 }
 
+pub fn handle_client_dispatch() void {}
+
 /// Deinitializes a `net.Client` instance and cleans up any resources consumed through
 /// out the lifetime of the instance.
 fn close_client(self: *EventLoop, gpa: Allocator, client_fd: i32) void {
