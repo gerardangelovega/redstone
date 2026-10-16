@@ -11,9 +11,12 @@ pub fn build(b: *std.Build) !void {
     });
 
     const protocol_mod = b.addModule("protocol", .{
-        .root_source_file = b.path("src/protocol.zig"),
+        .root_source_file = b.path("src/protocol/root.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "assert", .module = assert_mod },
+        },
     });
 
     const sys_mod = b.addModule("sys", .{

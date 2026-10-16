@@ -86,10 +86,7 @@ pub fn receive_requests(self: *Client, gpa: Allocator) void {
             return;
         },
         error.SystemResourcesExhausted => {
-            log.debug("read() failed, {}: fd={d}, memory full", .{
-                err,
-                self.socket,
-            });
+            log.debug("read() failed, {}: fd={d}, memory full", .{ err, self.socket });
             self.state_desired = .close;
             return;
         },
@@ -107,23 +104,20 @@ pub fn receive_requests(self: *Client, gpa: Allocator) void {
     };
 
     self.buffer_receive.appendSlice(gpa, buffer[0..bytes_read_count]) catch |err| {
-        log.err(
-            "appending message bytes failed: fd={d} error={}",
-            .{ self.socket, err },
-        );
+        log.err("appending message bytes failed: fd={d} error={}", .{ self.socket, err });
         self.state_desired = .close;
         return;
     };
 
-    while (self.process_request(gpa)) {}
-
-    if (self.buffeer_send.items.len > 0) {
-        self.state_current = .send;
-        self.state_desired = .send;
-        self.send_responses();
-    } else {
-        self.state_desired = .send;
-    }
+    // while (self.process_request(gpa)) {}
+    //
+    // if (self.buffeer_send.items.len > 0) {
+    //     self.state_current = .send;
+    //     self.state_desired = .send;
+    //     self.send_responses();
+    // } else {
+    //     self.state_desired = .send;
+    // }
 }
 
 /// Sends the queued bytes that comprise a response to the socket send buffer for
@@ -141,10 +135,7 @@ pub fn send_responses(self: *Client) void {
             return;
         },
         error.SystemResourcesExhausted => {
-            log.debug(
-                "write() failed, {}: fd={d}, memory full",
-                .{ err, self.socket },
-            );
+            log.debug("write() failed, {}: fd={d}, memory full", .{ err, self.socket });
             self.state_desired = .close;
             return;
         },
@@ -171,36 +162,42 @@ pub fn send_responses(self: *Client) void {
 /// Parses the queued bytes into a complete request, dispatches the complete request,
 /// and queues the results of the dispatched request into a buffer for
 /// sending/responding back to the connected peer.
-fn process_request(self: *Client, gpa: Allocator) bool {
-    if (self.buffer_receive.items.len < protocol.header_length) {
-        return false;
-    }
+// fn process_request(self: *Client, gpa: Allocator) bool {
+//     if (self.buffer_receive.items.len < protocol.header_length) {
+//         return false;
+//     }
+//
+//     const header = self.buffer_receive.items[0..protocol.header_length];
+//     const body_length: u32 = std.mem.readInt(u32, header, .little);
+//     if (body_length > protocol.body_length_max) {
+//         self.state_desired = .close;
+//         return false;
+//     }
+//
+//     const message_length: u32 = protocol.header_length + body_length;
+//     if (message_length > self.buffer_receive.items.len) {
+//         return false;
+//     }
+//
+//     const body = self.buffer_receive.items[protocol.header_length..message_length];
+//     log.info("Client: {s}", .{body});
+//     self.buffeer_send.ensureUnusedCapacity(gpa, message_length) catch |err| {
+//         log.err(
+//             "reserving outgoing memory for message failed, {}: fd={d}",
+//             .{ err, self.socket },
+//         );
+//         self.state_desired = .close;
+//         return false;
+//     };
+//     self.buffeer_send.appendSliceAssumeCapacity(header);
+//     self.buffeer_send.appendSliceAssumeCapacity(body);
+//     self.buffer_receive.replaceRangeAssumeCapacity(0, message_length, &.{});
+//
+//     return true;
+// }
 
-    const header = self.buffer_receive.items[0..protocol.header_length];
-    const body_length: u32 = std.mem.readInt(u32, header, .little);
-    if (body_length > protocol.body_length_max) {
-        self.state_desired = .close;
-        return false;
-    }
+pub fn peek_received_bytes(_: *Client) void {}
 
-    const message_length: u32 = protocol.header_length + body_length;
-    if (message_length > self.buffer_receive.items.len) {
-        return false;
-    }
+pub fn consume_received_bytes(_: *Client) void {}
 
-    const body = self.buffer_receive.items[protocol.header_length..message_length];
-    log.info("Client: {s}", .{body});
-    self.buffeer_send.ensureUnusedCapacity(gpa, message_length) catch |err| {
-        log.err(
-            "reserving outgoing memory for message failed, {}: fd={d}",
-            .{ err, self.socket },
-        );
-        self.state_desired = .close;
-        return false;
-    };
-    self.buffeer_send.appendSliceAssumeCapacity(header);
-    self.buffeer_send.appendSliceAssumeCapacity(body);
-    self.buffer_receive.replaceRangeAssumeCapacity(0, message_length, &.{});
-
-    return true;
-}
+pub fn append_send_bytes(_: *Client) void {}
