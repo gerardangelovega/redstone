@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const Request = @import("Request.zig");
-const commands = @import("../commands.zig");
+const registry = @import("../registry.zig");
 const message = @import("../message.zig");
 
 const Allocator = std.mem.Allocator;
@@ -42,14 +42,11 @@ pub fn parse(self: *RequestParser, bytes_in: []const u8, request_out: *Request) 
     }
 
     // Check the validity of the command and its corresponding data.
-    const command = commands.Command.decode(request_out.header.command_code);
+    const command = registry.Command.decode(request_out.header.command_code);
     if (command == .unknown) {
         return;
     }
-    if (request_out.header.data_count < command.arity().min) {
-        return;
-    }
-    if (request_out.header.data_count > command.arity().max) {
+    if (command.arity().contains(request_out.header.data_count)) {
         return;
     }
 

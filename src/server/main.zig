@@ -13,12 +13,12 @@ pub const std_options: std.Options = .{
 pub fn main(init: std.process.Init) void {
     const gpa = init.gpa;
 
-    const get: protocol.Command = .{ .keyspace = .get };
-    std.debug.print("keyspace command is: {s}\n", .{@tagName(get.keyspace)});
+    const get: protocol.registry.Command = .{ .string = .get };
+    std.debug.print("keyspace command is: {s}\n", .{@tagName(get.string)});
     std.debug.print("keyspace command opcode is: {d}\n", .{get.encode()});
 
-    const del = protocol.Command.decode(401);
-    std.debug.print("keyspace command is: {s}\n", .{@tagName(del.keyspace)});
+    const del = protocol.registry.Command.decode(400);
+    std.debug.print("keyspace command is: {s}\n", .{@tagName(del.key)});
     std.debug.print("keyspace command opcode is: {d}\n", .{del.encode()});
 
     // SAFETY: initialized in-place with event_loop.init()

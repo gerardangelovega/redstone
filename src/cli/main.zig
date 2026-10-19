@@ -10,6 +10,9 @@ const net = @import("net.zig");
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
 
+    const command: protocol.registry.Command = .{ .key = .delete };
+    _ = command;
+
     // SAFETY: defined and initialized by request_parser.init();
     var request_parser: protocol.RequestParser = undefined;
     try request_parser.init(gpa);
