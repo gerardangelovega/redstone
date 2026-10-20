@@ -15,9 +15,9 @@ pub fn main(init: std.process.Init) !void {
 
     // SAFETY: defined and initialized by request.init();
     var request: protocol.message.Request = undefined;
-    request.init(600, &.{
-        .{ .int = 4096 },
-        .{ .dbl = 3.14 },
+    request.init(.{ .string = .get }, &.{
+        .{ .str = "hello" },
+        .{ .str = "world" },
     });
 
     std.log.debug("original request header: {any}", .{request.header});
@@ -54,14 +54,7 @@ pub fn main(init: std.process.Init) !void {
     try parsed_request.parse(gpa, bytes);
     // try request_parser.parse(bytes, &parsed_request);
 
-    defer {
-        for (parsed_request.body.data) |datum| {
-            if (datum == .str) {
-                gpa.free(datum.str);
-            }
-        }
-        gpa.free(parsed_request.body.data);
-    }
+    defer gpa.free(parsed_request.body.data);
 
     std.log.debug("parsed request header: {any}", .{parsed_request.header});
     std.log.debug("parsed request body: {any}", .{parsed_request.body});

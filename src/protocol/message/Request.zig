@@ -9,7 +9,7 @@ header: Header,
 body: Body,
 
 // TODO: use Command instead of u16
-pub fn init(self: *Request, command_code: u16, data: []const message.Datum) void {
+pub fn init(self: *Request, command: registry.Command, data: []const message.Datum) void {
     self.body.data = data;
     self.body.size = 0;
     for (self.body.data) |datum| {
@@ -17,7 +17,7 @@ pub fn init(self: *Request, command_code: u16, data: []const message.Datum) void
     }
 
     self.header.message_size = Header.size + self.body.size;
-    self.header.command_code = command_code;
+    self.header.command_code = command.encode();
     self.header.data_count = @intCast(self.body.data.len);
 }
 
@@ -123,7 +123,7 @@ pub const Body = struct {
         while (bytes_view.len > 0) {
             // SAFETY: defined in the following switch statement
             var datum: message.Datum = undefined;
-            try datum.decode(allocator, bytes_view);
+            datum.decode(bytes_view);
             try data.append(allocator, datum);
 
             bytes_view = bytes_view[datum.size()..];
