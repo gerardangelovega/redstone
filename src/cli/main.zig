@@ -13,29 +13,8 @@ pub fn main(init: std.process.Init) !void {
     const command: protocol.registry.Command = .{ .key = .delete };
     _ = command;
 
-    // SAFETY: defined and initialized by request_parser.init();
-    var request_parser: protocol.RequestParser = undefined;
-    try request_parser.init(gpa);
-    defer request_parser.deinit(gpa);
-
-    std.log.debug(
-        "request parser backing buffer size: {d}",
-        .{request_parser.backing_buffer.len},
-    );
-
-    // SAFETY: defined and initialized by request_serializer.init();
-    var request_serializer: protocol.RequestSerializer = undefined;
-    try request_serializer.init(gpa);
-    defer request_serializer.deinit(gpa);
-
-    std.log.debug(
-        "request serializer backing buffer size: {d}",
-        .{request_serializer.backing_buffer.len},
-    );
-    std.log.debug("", .{});
-
     // SAFETY: defined and initialized by request.init();
-    var request: protocol.Request = undefined;
+    var request: protocol.message.Request = undefined;
     request.init(600, &.{
         .{
             .tag = .str,
@@ -73,14 +52,25 @@ pub fn main(init: std.process.Init) !void {
     const bytes: []u8 = try gpa.alloc(u8, request.header.message_size);
     defer gpa.free(bytes);
 
-    request_serializer.serialize(&request, bytes);
+    // request_serializer.serialize(&request, bytes);
+    request.serialize(bytes);
 
     std.log.debug("serialized request in bytes: {x}", .{bytes});
     std.log.debug("", .{});
 
     // SAFETY: defined and initialized by request_parser.parse();
-    var parsed_request: protocol.Request = undefined;
-    try request_parser.parse(bytes, &parsed_request);
+    var parsed_request: protocol.message.Request = undefined;
+    try parsed_request.parse(gpa, bytes);
+    // try request_parser.parse(bytes, &parsed_request);
+
+    defer {
+        for (parsed_request.body.data) |datum| {
+            if (datum.value == .str) {
+                gpa.free(datum.value.str);
+            }
+        }
+        gpa.free(parsed_request.body.data);
+    }
 
     std.log.debug("parsed request header: {any}", .{parsed_request.header});
     std.log.debug("parsed request body: {any}", .{parsed_request.body});

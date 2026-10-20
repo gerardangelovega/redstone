@@ -1,1 +1,1 @@
-pub const Command = @import("registry/Command.zig").Command;
+pub const Command = @import("registry/command.zig").Command;
