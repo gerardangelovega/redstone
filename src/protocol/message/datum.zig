@@ -125,7 +125,7 @@ pub const Datum = union(enum(u8)) {
         }
     }
 
-    pub fn decode(self: *Datum, allocator: std.mem.Allocator, bytes_in: []const u8) !void {
+    pub fn decode(self: *Datum, bytes_in: []const u8) void {
         var bytes_view: []const u8 = bytes_in[0..];
 
         const datum_tag_type = std.meta.Tag(Datum);
@@ -155,7 +155,7 @@ pub const Datum = union(enum(u8)) {
                 const datum_value = bytes_view[0..datum_length];
                 bytes_view = bytes_view[datum_length..];
 
-                self.* = .{ .err = try allocator.dupe(u8, datum_value) };
+                self.* = .{ .err = datum_value };
             },
             .int => {
                 const datum_value_type = @TypeOf(self.int);
@@ -194,7 +194,7 @@ pub const Datum = union(enum(u8)) {
                 const datum_value = bytes_view[0..datum_length];
                 bytes_view = bytes_view[datum_length..];
 
-                self.* = .{ .str = try allocator.dupe(u8, datum_value) };
+                self.* = .{ .str = datum_value };
             },
         }
     }

@@ -28,7 +28,6 @@ pub fn parse(self: *Request, allocator: std.mem.Allocator, bytes_in: []const u8)
         return;
     }
     const header_bytes_in: []const u8 = bytes_in[0..Request.Header.size];
-    // self.parse_header(header_bytes_in, &request_out.header);
     self.header.parse(header_bytes_in);
 
     // Check if there are enough bytes to read the entire message.
@@ -48,11 +47,13 @@ pub fn parse(self: *Request, allocator: std.mem.Allocator, bytes_in: []const u8)
     const body_bytes_begin = Request.Header.size;
     const body_bytes_end = self.header.message_size;
     const body_bytes_in: []const u8 = bytes_in[body_bytes_begin..body_bytes_end];
-    // try self.parse_body(body_bytes_in, &request_out.body);
     try self.body.parse(allocator, body_bytes_in);
 
     // Check if the data count in the body is consistent with the data count in the header
     if (self.body.data.len != self.header.data_count) {
+        return;
+    }
+    if (self.body.size + Request.Header.size != self.header.message_size) {
         return;
     }
 
@@ -64,12 +65,12 @@ pub fn serialize(self: *const Request, bytes_out: []u8) void {
         return;
     }
     const header_bytes_out: []u8 = bytes_out[0..Request.Header.size];
-    // self.serialize_header(self.header, header_bytes_out);
     self.header.serialize(header_bytes_out);
 
     const body_bytes_out: []u8 = bytes_out[Request.Header.size..];
-    // self.serialize_body(&self.body, body_bytes_out);
     self.body.serialize(body_bytes_out);
+
+    return;
 }
 
 pub const Header = extern struct {
