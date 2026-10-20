@@ -16,25 +16,16 @@ pub fn main(init: std.process.Init) !void {
     // SAFETY: defined and initialized by request.init();
     var request: protocol.message.Request = undefined;
     request.init(600, &.{
-        .{
-            .tag = .str,
-            .length = 5,
-            .value = .{ .str = "hello" },
-        },
-        .{
-            .tag = .str,
-            .length = 5,
-            .value = .{ .str = "world" },
-        },
+        .{ .int = 4096 },
+        .{ .dbl = 3.14 },
     });
 
     std.log.debug("original request header: {any}", .{request.header});
     std.log.debug("original request body: {any}", .{request.body});
     std.log.debug("original request body data:", .{});
     for (request.body.data) |datum| {
-        switch (datum.value) {
-            .int,
-            => |val| {
+        switch (datum) {
+            .int => |val| {
                 std.log.debug("datum: {d}", .{val});
             },
             .dbl => |val| {
@@ -65,8 +56,8 @@ pub fn main(init: std.process.Init) !void {
 
     defer {
         for (parsed_request.body.data) |datum| {
-            if (datum.value == .str) {
-                gpa.free(datum.value.str);
+            if (datum == .str) {
+                gpa.free(datum.str);
             }
         }
         gpa.free(parsed_request.body.data);
@@ -76,9 +67,8 @@ pub fn main(init: std.process.Init) !void {
     std.log.debug("parsed request body: {any}", .{parsed_request.body});
     std.log.debug("parsed request body data:", .{});
     for (parsed_request.body.data) |datum| {
-        switch (datum.value) {
-            .int,
-            => |val| {
+        switch (datum) {
+            .int => |val| {
                 std.log.debug("datum: {d}", .{val});
             },
             .dbl => |val| {

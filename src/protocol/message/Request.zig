@@ -123,77 +123,11 @@ pub const Body = struct {
         while (bytes_view.len > 0) {
             // SAFETY: defined in the following switch statement
             var datum: message.Datum = undefined;
-
-            const tag_type = @typeInfo(@TypeOf(datum.tag)).@"enum".tag_type;
-            const tag_size = @sizeOf(tag_type);
-            datum.tag = @enumFromInt(std.mem.readInt(
-                tag_type,
-                bytes_view[0..tag_size],
-                .little,
-            ));
-            bytes_view = bytes_view[tag_size..];
-            size = size + tag_size;
-
-            switch (datum.tag) {
-                .nil => {
-                    datum.length = 0;
-                    datum.value = .{ .nil = {} };
-                },
-                .int => {
-                    const length = @sizeOf(@TypeOf(datum.value.int));
-
-                    const value_type = @TypeOf(datum.value.int);
-                    const value: value_type = std.mem.readInt(
-                        value_type,
-                        bytes_view[0..length],
-                        .little,
-                    );
-                    bytes_view = bytes_view[length..];
-                    size = size + length;
-
-                    datum.length = length;
-                    datum.value = .{ .int = value };
-                },
-                .dbl => {
-                    const length = @sizeOf(@TypeOf(datum.value.dbl));
-
-                    const value_type = @TypeOf(datum.value.dbl);
-                    const value: value_type = @bitCast(std.mem.readInt(
-                        u64,
-                        bytes_view[0..length],
-                        .little,
-                    ));
-                    bytes_view = bytes_view[length..];
-                    size = size + length;
-
-                    datum.length = length;
-                    datum.value = .{ .dbl = value };
-                },
-                .err, .str => {
-                    const length_type = @TypeOf(datum.length);
-                    const length_size = @sizeOf(length_type);
-                    const length: length_type = std.mem.readInt(
-                        length_type,
-                        bytes_view[0..length_size],
-                        .little,
-                    );
-                    bytes_view = bytes_view[length_size..];
-                    size = size + length_size;
-
-                    const value: []const u8 = bytes_view[0..length];
-                    bytes_view = bytes_view[length..];
-                    size = size + length;
-
-                    datum.length = length;
-
-                    if (datum.tag == .err) {
-                        datum.value = .{ .err = try allocator.dupe(u8, value) };
-                    } else if (datum.tag == .str) {
-                        datum.value = .{ .str = try allocator.dupe(u8, value) };
-                    }
-                },
-            }
+            try datum.decode(allocator, bytes_view);
             try data.append(allocator, datum);
+
+            bytes_view = bytes_view[datum.size()..];
+            size = size + datum.size();
         }
 
         self.data = try data.toOwnedSlice(allocator);
@@ -204,56 +138,8 @@ pub const Body = struct {
         var bytes_view: []u8 = bytes_out[0..];
 
         for (self.data) |datum| {
-            const tag_type = @typeInfo(@TypeOf(datum.tag)).@"enum".tag_type;
-            const tag_size = @sizeOf(tag_type);
-            std.mem.writeInt(
-                tag_type,
-                bytes_view[0..tag_size],
-                @intFromEnum(datum.tag),
-                .little,
-            );
-            bytes_view = bytes_view[tag_size..];
-
-            switch (datum.value) {
-                .nil => {}, // do nothing
-                .int => |value| {
-                    const value_type = @TypeOf(value);
-                    const value_size = @sizeOf(value_type);
-                    std.mem.writeInt(
-                        value_type,
-                        bytes_view[0..value_size],
-                        value,
-                        .little,
-                    );
-                    bytes_view = bytes_view[value_size..];
-                },
-                .dbl => |value| {
-                    const value_bits: u64 = @bitCast(value);
-                    const value_type = @TypeOf(value_bits);
-                    const value_size = @sizeOf(value_type);
-                    std.mem.writeInt(
-                        value_type,
-                        bytes_view[0..value_size],
-                        value_bits,
-                        .little,
-                    );
-                    bytes_view = bytes_view[value_size..];
-                },
-                .err, .str => |value| {
-                    const length_type = @TypeOf(datum.length);
-                    const length_size = @sizeOf(length_type);
-                    std.mem.writeInt(
-                        length_type,
-                        bytes_view[0..length_size],
-                        datum.length,
-                        .little,
-                    );
-                    bytes_view = bytes_view[length_size..];
-
-                    @memcpy(bytes_view[0..value.len], value);
-                    bytes_view = bytes_view[value.len..];
-                },
-            }
+            datum.encode(bytes_view);
+            bytes_view = bytes_view[datum.size()..];
         }
     }
 };
