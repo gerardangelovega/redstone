@@ -5,6 +5,7 @@ const sys = @import("sys");
 // file imports
 const assert = @import("assert");
 const net = @import("net.zig");
+const protocol = @import("protocol");
 
 // aliases
 const Allocator = std.mem.Allocator;
@@ -28,8 +29,10 @@ epoll: net.io.Epoll,
 clients: std.ArrayList(?*net.Client), // array map mapping fd as index to a net.Client
 state: State,
 
-/// Initializes an existing `EventLoop` instances along with its dependencies *(e.g. `net.Listener`, `net.Epoll`, etc.)*.
+/// Initializes an existing `EventLoop` instances along with its dependencies
+/// *(e.g. `net.Listener`, `net.Epoll`, etc.)*.
 pub fn init(self: *EventLoop, gpa: Allocator) void {
+    // SAFETY: defined within the function
     self.* = .{
         .listener = undefined,
         .epoll = undefined,
@@ -186,17 +189,17 @@ fn handle_client(self: *EventLoop, gpa: Allocator, client_fd: i32, events: u32) 
     const client: *net.Client = self.clients.items[client_index] orelse return;
 
     if ((events & linux.EPOLL.IN) != 0 and client.state_current == .receive) {
-        client.receive_requests(gpa);
+        self.handle_client_receive(gpa, client);
     }
 
     if ((events & linux.EPOLL.OUT) != 0 and client.state_current == .send) {
-        client.send_responses();
+        self.handle_client_send(client);
     }
 
     const dead = (events & (linux.EPOLL.ERR | linux.EPOLL.HUP)) != 0;
     const closed = client.state_current == .close or client.state_desired == .close;
     if (dead or closed) {
-        self.close_client(gpa, client.socket);
+        self.handle_client_close(gpa, client.socket);
         return;
     }
 
@@ -215,11 +218,73 @@ fn handle_client(self: *EventLoop, gpa: Allocator, client_fd: i32, events: u32) 
     }
 }
 
-pub fn handle_client_dispatch() void {}
+fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) void {
+    assert.cheap(self.state == .running);
+
+    const received = client.receive_requests(gpa);
+
+    while (received) {
+        const received_bytes: []const u8 = client.peek_received_bytes();
+
+        // SAFETY: initialized by parse();
+        var request: protocol.message.Request = undefined;
+        const request_parse_result = request.parse(gpa, received_bytes) catch |err| {
+            log.debug("request parsing allocations failed, {}", .{err});
+            client.state_desired = .close;
+            break;
+        };
+
+        switch (request_parse_result) {
+            .incomplete => {
+                break;
+            },
+            .malformed => {
+                client.state_desired = .close;
+                request.deinit(gpa);
+                break;
+            },
+            .complete => {},
+        }
+        defer request.deinit(gpa);
+
+        var response: protocol.message.Response = undefined;
+        response.init(.ok, &.{.{ .str = "acknowledged" }});
+
+        const response_bytes = gpa.alloc(u8, response.header.message_size) catch |err| {
+            log.debug("response serliazing allocations failed, {}", .{err});
+            client.state_desired = .close;
+            break;
+        };
+        response.serialize(response_bytes);
+
+        if (!client.append_send_bytes(gpa, response_bytes)) {
+            client.state_desired = .close;
+            break;
+        }
+
+        client.consume_received_bytes(request.header.message_size);
+    }
+
+    if (client.buffer_send.items.len > 0) {
+        client.state_current = .send;
+        client.state_desired = .send;
+        client.send_responses();
+    } else {
+        if (client.state_desired != .close and client.state_current != .close) {
+            client.state_desired = .send;
+        }
+    }
+}
+
+fn handle_client_send(self: *const EventLoop, client: *net.Client) void {
+    assert.cheap(self.state == .running);
+
+    client.send_responses();
+}
 
 /// Deinitializes a `net.Client` instance and cleans up any resources consumed through
 /// out the lifetime of the instance.
-fn close_client(self: *EventLoop, gpa: Allocator, client_fd: i32) void {
+fn handle_client_close(self: *EventLoop, gpa: Allocator, client_fd: i32) void {
     assert.cheap(self.state == .running);
     assert.cheap(client_fd >= 0);
 

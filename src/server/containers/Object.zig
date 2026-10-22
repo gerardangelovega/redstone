@@ -4,11 +4,11 @@ const assert = @import("assert");
 /// mainly used to retrieve the parent container to access the actual data.
 const Object = @This();
 
+kind: Kind,
+
 pub const Kind = enum(u8) {
     string,
 };
-
-kind: Kind,
 
 pub const String = struct {
     object: Object,

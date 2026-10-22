@@ -104,24 +104,37 @@ pub fn connect(self: *Connection, addr: [4]u8, port: u16) void {
 
 /// Sends a request to the server provided a request `body` containing the contents of
 /// the request.
-pub fn send_request(self: *Connection, gpa: Allocator, body: []const u8) bool {
-    if (body.len > protocol.body_length_max) {
+pub fn send_request(
+    self: *Connection,
+    gpa: Allocator,
+    request: *const protocol.message.Request,
+) bool {
+    // if (body.len > protocol.body_length_max) {
+    //     return false;
+    // }
+    //
+    // var header: [protocol.header_length]u8 = undefined;
+    // std.mem.writeInt(u32, &header, @intCast(body.len), .little);
+    //
+    // const message_length = protocol.header_length + body.len;
+    const request_bytes = gpa.alloc(u8, request.header.message_size) catch |err| {
+        std.log.err(
+            "memory allocation for request serialization failed: fd={d} error={}",
+            .{ self.socket, err },
+        );
         return false;
-    }
+    };
+    defer gpa.free(request_bytes);
+    request.serialize(request_bytes);
 
-    var header: [protocol.header_length]u8 = undefined;
-    std.mem.writeInt(u32, &header, @intCast(body.len), .little);
-
-    const message_length = protocol.header_length + body.len;
-    self.buffer_send.ensureUnusedCapacity(gpa, message_length) catch |err| {
+    self.buffer_send.ensureUnusedCapacity(gpa, request.header.message_size) catch |err| {
         std.log.err(
             "reserving outgoing memory for message failed: fd={d} error={}",
             .{ self.socket, err },
         );
         return false;
     };
-    self.buffer_send.appendSliceAssumeCapacity(&header);
-    self.buffer_send.appendSliceAssumeCapacity(body);
+    self.buffer_send.appendSliceAssumeCapacity(request_bytes);
 
     var bytes_to_send = self.buffer_send.items[0..];
     while (bytes_to_send.len > 0) {
@@ -152,14 +165,15 @@ pub fn send_request(self: *Connection, gpa: Allocator, body: []const u8) bool {
         bytes_to_send = bytes_to_send[bytes_sent_count..];
     }
 
-    self.buffer_send.replaceRangeAssumeCapacity(0, message_length, &.{});
+    self.buffer_send.replaceRangeAssumeCapacity(0, request.header.message_size, &.{});
     return true;
 }
 
 /// Receives a response from the server, parses the response, and logs the body of the
 /// parsed response.
 pub fn receive_response(self: *Connection, gpa: Allocator) bool {
-    self.buffer_receive.appendNTimes(gpa, 0, protocol.header_length) catch |err| {
+    const header_size = protocol.message.Response.Header.size;
+    self.buffer_receive.appendNTimes(gpa, 0, header_size) catch |err| {
         std.log.err(
             "reserving incoming memory for header failed: fd={d} error={}",
             .{ self.socket, err },
@@ -167,7 +181,7 @@ pub fn receive_response(self: *Connection, gpa: Allocator) bool {
         return false;
     };
 
-    var header_bytes_to_read: []u8 = self.buffer_receive.items[0..protocol.header_length];
+    var header_bytes_to_read: []u8 = self.buffer_receive.items[0..header_size];
     while (header_bytes_to_read.len > 0) {
         const bytes_read_count: usize = sys.linux.recv(
             self.socket,
@@ -196,13 +210,14 @@ pub fn receive_response(self: *Connection, gpa: Allocator) bool {
         header_bytes_to_read = header_bytes_to_read[bytes_read_count..];
     }
 
-    const header = self.buffer_receive.items[0..protocol.header_length];
-    const body_length: u32 = std.mem.readInt(u32, header, .little);
-    if (body_length > protocol.body_length_max) {
+    var response_header: protocol.message.Response.Header = undefined;
+    response_header.parse(self.buffer_receive.items[0..header_size]);
+
+    if (response_header.message_size > protocol.message.bytes_max) {
         return false;
     }
 
-    self.buffer_receive.appendNTimes(gpa, 0, body_length) catch |err| {
+    self.buffer_receive.appendNTimes(gpa, 0, response_header.message_size) catch |err| {
         std.log.err(
             "reserving incoming memory for body failed: fd={d} error={}",
             .{ self.socket, err },
@@ -210,9 +225,9 @@ pub fn receive_response(self: *Connection, gpa: Allocator) bool {
         return false;
     };
 
-    const message_length = protocol.header_length + body_length;
+    const message_size = response_header.message_size;
 
-    var body_bytes_to_read = self.buffer_receive.items[protocol.header_length..message_length];
+    var body_bytes_to_read = self.buffer_receive.items[header_size..message_size];
     while (body_bytes_to_read.len > 0) {
         const bytes_read_count: usize = sys.linux.recv(
             self.socket,
@@ -241,12 +256,35 @@ pub fn receive_response(self: *Connection, gpa: Allocator) bool {
         body_bytes_to_read = body_bytes_to_read[bytes_read_count..];
     }
 
-    std.log.info(
-        "Server: {s}",
-        .{self.buffer_receive.items[protocol.header_length..message_length]},
-    );
+    var response: protocol.message.Response = undefined;
+    response.parse(gpa, self.buffer_receive.items[0..message_size]) catch |err| {
+        std.log.err(
+            "response parsing memory allocations failed: fd={d} error={}",
+            .{ self.socket, err },
+        );
+        return false;
+    };
+    defer gpa.free(response.body.data);
 
-    self.buffer_receive.replaceRangeAssumeCapacity(0, message_length, &.{});
+    for (response.body.data) |datum| {
+        switch (datum) {
+            .err => |val| {
+                std.log.debug("(err) {s}", .{val});
+            },
+            .int => |val| {
+                std.log.debug("(int) {d}", .{val});
+            },
+            .dbl => |val| {
+                std.log.debug("(dbl) {d}", .{val});
+            },
+            .str => |val| {
+                std.log.debug("(str) {s}", .{val});
+            },
+            else => {},
+        }
+    }
+
+    self.buffer_receive.replaceRangeAssumeCapacity(0, message_size, &.{});
 
     return true;
 }

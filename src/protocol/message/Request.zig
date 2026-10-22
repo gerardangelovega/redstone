@@ -21,28 +21,33 @@ pub fn init(self: *Request, command: registry.Command, data: []const message.Dat
     self.header.data_count = @intCast(self.body.data.len);
 }
 
-// TODO: put parse and serializer here, I'm honestly overthinking it
-pub fn parse(self: *Request, allocator: std.mem.Allocator, bytes_in: []const u8) !void {
+pub fn deinit(self: *Request, allocator: std.mem.Allocator) void {
+    allocator.free(self.body.data);
+}
+
+pub const ParseResult = enum { incomplete, malformed, complete };
+
+pub fn parse(self: *Request, allocator: std.mem.Allocator, bytes_in: []const u8) !ParseResult {
     // Check if there are enough bytes to read at least the header.
     if (bytes_in.len < Request.Header.size) {
-        return;
+        return .incomplete;
     }
     const header_bytes_in: []const u8 = bytes_in[0..Request.Header.size];
     self.header.parse(header_bytes_in);
 
     // Check if there are enough bytes to read the entire message.
     if (bytes_in.len < self.header.message_size) {
-        return;
+        return .incomplete;
     }
 
     // Check the validity of the command and its corresponding data.
-    const command = registry.Command.decode(self.header.command_code);
-    if (command == .unknown) {
-        return;
-    }
-    if (command.arity().contains(self.header.data_count)) {
-        return;
-    }
+    // const command = registry.Command.decode(self.header.command_code);
+    // if (command == .unknown) {
+    //     return .malformed;
+    // }
+    // if (command.arity().contains(self.header.data_count)) {
+    //     return .malformed;
+    // }
 
     const body_bytes_begin = Request.Header.size;
     const body_bytes_end = self.header.message_size;
@@ -51,13 +56,13 @@ pub fn parse(self: *Request, allocator: std.mem.Allocator, bytes_in: []const u8)
 
     // Check if the data count in the body is consistent with the data count in the header
     if (self.body.data.len != self.header.data_count) {
-        return;
+        return .malformed;
     }
     if (self.body.size + Request.Header.size != self.header.message_size) {
-        return;
+        return .malformed;
     }
 
-    return;
+    return .complete;
 }
 
 pub fn serialize(self: *const Request, bytes_out: []u8) void {

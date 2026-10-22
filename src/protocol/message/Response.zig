@@ -20,6 +20,10 @@ pub fn init(self: *Response, status: registry.Status, data: []const message.Datu
     self.header.data_count = @intCast(self.body.data.len);
 }
 
+pub fn deinit(self: *Response, allocator: std.mem.Allocator) void {
+    allocator.free(self.body.data);
+}
+
 pub fn parse(self: *Response, allocator: std.mem.Allocator, bytes_in: []const u8) !void {
     if (bytes_in.len < Response.Header.size) {
         return;

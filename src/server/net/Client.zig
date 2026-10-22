@@ -25,7 +25,7 @@ socket: i32,
 state_current: State, // action the client is performing (e.g. read, write, etc.)
 state_desired: State, // next action client wants to perform (e.g. read, write, etc.)
 buffer_receive: std.ArrayList(u8), // bytes from socket receive buffer for processing
-buffeer_send: std.ArrayList(u8), // bytes for socket send buffer for sending
+buffer_send: std.ArrayList(u8), // bytes for socket send buffer for sending
 
 /// Initializes an existing `Client` instance.
 pub fn init(self: *Client, connection_fd: i32) void {
@@ -36,7 +36,7 @@ pub fn init(self: *Client, connection_fd: i32) void {
         .state_current = .receive,
         .state_desired = .receive,
         .buffer_receive = .empty,
-        .buffeer_send = .empty,
+        .buffer_send = .empty,
     };
     log.debug("client initialized", .{});
 }
@@ -57,13 +57,13 @@ pub fn deinit(self: *Client, gpa: Allocator) void {
     self.socket = -1;
     self.state_current = .close;
     self.buffer_receive.deinit(gpa);
-    self.buffeer_send.deinit(gpa);
+    self.buffer_send.deinit(gpa);
     log.debug("client deinitialized", .{});
 }
 
 /// Receives bytes that comprise a request from the socket receive buffer and
 /// queues the bytes into a buffer for request parsing and dispatching.
-pub fn receive_requests(self: *Client, gpa: Allocator) void {
+pub fn receive_requests(self: *Client, gpa: Allocator) bool {
     assert.cheap(self.state_current == .receive);
 
     var buffer: [16 * 1024]u8 = undefined;
@@ -80,34 +80,36 @@ pub fn receive_requests(self: *Client, gpa: Allocator) void {
                 log.debug("unexpected end of file: fd={d}", .{self.socket});
             }
             self.state_desired = .close;
-            return;
+            return false;
         },
         error.WouldBlock, error.Interrupted => {
-            return;
+            return false;
         },
         error.SystemResourcesExhausted => {
             log.debug("read() failed, {}: fd={d}, memory full", .{ err, self.socket });
             self.state_desired = .close;
-            return;
+            return false;
         },
         error.ConnectionResetByPeer,
         error.ConnectionRefusedByPeer,
         => {
             log.debug("read() failed, {}: fd={d}", .{ err, self.socket });
             self.state_desired = .close;
-            return;
+            return false;
         },
         error.Unexpected => {
             self.state_desired = .close;
-            return;
+            return false;
         },
     };
 
     self.buffer_receive.appendSlice(gpa, buffer[0..bytes_read_count]) catch |err| {
         log.err("appending message bytes failed: fd={d} error={}", .{ self.socket, err });
         self.state_desired = .close;
-        return;
+        return false;
     };
+
+    return true;
 
     // while (self.process_request(gpa)) {}
     //
@@ -124,11 +126,11 @@ pub fn receive_requests(self: *Client, gpa: Allocator) void {
 /// responding to the connected peer's request.
 pub fn send_responses(self: *Client) void {
     assert.cheap(self.state_current == .send);
-    assert.cheap(self.buffeer_send.items.len > 0);
+    assert.cheap(self.buffer_send.items.len > 0);
 
     const bytes_written_count: usize = sys.linux.send(
         self.socket,
-        self.buffeer_send.items,
+        self.buffer_send.items,
         linux.MSG.NOSIGNAL,
     ) catch |err| switch (err) {
         error.WouldBlock, error.Interrupted => {
@@ -152,52 +154,30 @@ pub fn send_responses(self: *Client) void {
         },
     };
 
-    self.buffeer_send.replaceRangeAssumeCapacity(0, bytes_written_count, &.{});
+    self.buffer_send.replaceRangeAssumeCapacity(0, bytes_written_count, &.{});
 
-    if (self.buffeer_send.items.len == 0) {
+    if (self.buffer_send.items.len == 0) {
         self.state_desired = .receive;
     }
 }
 
-/// Parses the queued bytes into a complete request, dispatches the complete request,
-/// and queues the results of the dispatched request into a buffer for
-/// sending/responding back to the connected peer.
-// fn process_request(self: *Client, gpa: Allocator) bool {
-//     if (self.buffer_receive.items.len < protocol.header_length) {
-//         return false;
-//     }
-//
-//     const header = self.buffer_receive.items[0..protocol.header_length];
-//     const body_length: u32 = std.mem.readInt(u32, header, .little);
-//     if (body_length > protocol.body_length_max) {
-//         self.state_desired = .close;
-//         return false;
-//     }
-//
-//     const message_length: u32 = protocol.header_length + body_length;
-//     if (message_length > self.buffer_receive.items.len) {
-//         return false;
-//     }
-//
-//     const body = self.buffer_receive.items[protocol.header_length..message_length];
-//     log.info("Client: {s}", .{body});
-//     self.buffeer_send.ensureUnusedCapacity(gpa, message_length) catch |err| {
-//         log.err(
-//             "reserving outgoing memory for message failed, {}: fd={d}",
-//             .{ err, self.socket },
-//         );
-//         self.state_desired = .close;
-//         return false;
-//     };
-//     self.buffeer_send.appendSliceAssumeCapacity(header);
-//     self.buffeer_send.appendSliceAssumeCapacity(body);
-//     self.buffer_receive.replaceRangeAssumeCapacity(0, message_length, &.{});
-//
-//     return true;
-// }
+pub fn peek_received_bytes(self: *const Client) []const u8 {
+    return self.buffer_receive.items[0..];
+}
 
-pub fn peek_received_bytes(_: *Client) void {}
+pub fn consume_received_bytes(self: *Client, n: usize) void {
+    self.buffer_receive.replaceRangeAssumeCapacity(0, n, &.{});
+}
 
-pub fn consume_received_bytes(_: *Client) void {}
-
-pub fn append_send_bytes(_: *Client) void {}
+pub fn append_send_bytes(self: *Client, gpa: Allocator, bytes: []const u8) bool {
+    self.buffer_send.ensureUnusedCapacity(gpa, bytes.len) catch |err| {
+        log.err(
+            "reserving memory for appending bytes to send buffer failed, {}: fd={d}",
+            .{ err, self.socket },
+        );
+        self.state_desired = .close;
+        return false;
+    };
+    self.buffer_send.appendSliceAssumeCapacity(bytes);
+    return true;
+}
