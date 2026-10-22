@@ -18,27 +18,52 @@ pub fn main(init: std.process.Init) void {
     connection.connect([4]u8{ 127, 0, 0, 1 }, 6767);
 
     // SAFETY: initialized by init()
-    var request_echo: protocol.message.Request = undefined;
-    request_echo.init(.{ .connection = .echo }, &.{
-        .{ .str = "hello" },
-    });
+    var request_invalid_1: protocol.message.Request = undefined;
+    request_invalid_1.init(.{ .connection = .invalid }, &.{});
 
-    if (!connection.send_request(gpa, &request_echo)) return;
-    if (!connection.send_request(gpa, &request_echo)) return;
-    if (!connection.send_request(gpa, &request_echo)) return;
-    if (!connection.receive_response(gpa)) return;
-    if (!connection.receive_response(gpa)) return;
+    if (!connection.send_request(gpa, &request_invalid_1)) return;
     if (!connection.receive_response(gpa)) return;
 
     // SAFETY: initialized by init()
-    var request_ping: protocol.message.Request = undefined;
-    request_ping.init(.{ .connection = .ping }, &.{});
+    var request_echo_1: protocol.message.Request = undefined;
+    request_echo_1.init(.{ .connection = .echo }, &.{
+        .{ .str = "hello" },
+    });
 
-    if (!connection.send_request(gpa, &request_ping)) return;
-    if (!connection.send_request(gpa, &request_ping)) return;
-    if (!connection.send_request(gpa, &request_ping)) return;
+    if (!connection.send_request(gpa, &request_echo_1)) return;
     if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_echo_2: protocol.message.Request = undefined;
+    request_echo_2.init(.{ .connection = .echo }, &.{
+        .{ .str = "hello" },
+        .{ .str = "world" },
+    });
+
+    if (!connection.send_request(gpa, &request_echo_2)) return;
     if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_echo_3: protocol.message.Request = undefined;
+    request_echo_3.init(.{ .connection = .echo }, &.{
+        .{ .dbl = 3.14 },
+    });
+
+    if (!connection.send_request(gpa, &request_echo_3)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_ping_1: protocol.message.Request = undefined;
+    request_ping_1.init(.{ .connection = .ping }, &.{});
+
+    if (!connection.send_request(gpa, &request_ping_1)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_ping_2: protocol.message.Request = undefined;
+    request_ping_2.init(.{ .connection = .ping }, &.{.{ .str = "ping" }});
+
+    if (!connection.send_request(gpa, &request_ping_2)) return;
     if (!connection.receive_response(gpa)) return;
 
     // SAFETY: initialized by init()
