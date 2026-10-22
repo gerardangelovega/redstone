@@ -18,7 +18,7 @@ pub fn cheap(ok: bool) void {
 /// modes.
 pub fn expensive(comptime check_fn: anytype, args: anytype) void {
     @disableInstrumentation();
-    if (builtin.mode == .Debug) {
+    if (builtin.mode == .debug) {
         if (!@call(.auto, check_fn, args)) fail();
     }
 }

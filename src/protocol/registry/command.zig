@@ -43,8 +43,9 @@ pub const Command = union(enum) {
     }
 
     fn decode_family_field(comptime T: type) []const u8 {
-        inline for (@typeInfo(Command).@"union".fields) |field| {
-            if (field.type == T) return field.name;
+        const u = @typeInfo(Command).@"union";
+        inline for (u.field_types, u.field_names) |U, name| {
+            if (U == T) return name;
         }
         @compileError("decode_family_field() failed: field does not exist in " ++ @typeName(T));
     }
@@ -55,7 +56,7 @@ pub const Command = union(enum) {
                 return code;
             },
             inline else => |command_family| {
-                return @intFromEnum(command_family);
+                return @backingInt(command_family);
             },
         }
     }
@@ -126,9 +127,9 @@ pub const Command = union(enum) {
     };
 
     comptime {
-        for (@typeInfo(Command).@"union".fields) |field| {
-            const T: type = field.type;
+        const u = @typeInfo(Command).@"union";
 
+        for (u.field_types) |T| {
             if (@typeInfo(T) != .@"enum") continue;
 
             // tag_type validation
@@ -149,18 +150,17 @@ pub const Command = union(enum) {
             assert.static((T.max - T.min + 1) == 200);
 
             // type fields validation
-            for (@typeInfo(T).@"enum".fields) |T_field| {
-                assert.static(T_field.value >= T.min and T_field.value <= T.max);
+            const e = @typeInfo(T).@"enum";
+            for (e.field_values) |value| {
+                assert.static(value >= T.min and value <= T.max);
             }
         }
 
         // collision validation
-        for (@typeInfo(Command).@"union".fields) |field_a| {
-            const T: type = field_a.type;
+        for (u.field_types) |T| {
             if (@typeInfo(T) != .@"enum") continue;
 
-            for (@typeInfo(Command).@"union".fields) |field_b| {
-                const U: type = field_b.type;
+            for (u.field_types) |U| {
                 if (@typeInfo(U) != .@"enum") continue;
 
                 if (T == U) continue;
@@ -172,8 +172,7 @@ pub const Command = union(enum) {
         var min_lowest: u32 = std.math.maxInt(u32);
         var max_highest: u32 = 0;
         var stride_total: u32 = 0;
-        for (@typeInfo(Command).@"union".fields) |field| {
-            const T: type = field.type;
+        for (u.field_types) |T| {
             if (@typeInfo(T) != .@"enum") continue;
 
             min_lowest = @min(min_lowest, T.min);

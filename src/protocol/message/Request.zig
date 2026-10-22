@@ -83,10 +83,11 @@ pub const Header = extern struct {
     pub fn parse(self: *Header, bytes_in: []const u8) void {
         var bytes_view: []const u8 = bytes_in[0..];
 
-        inline for (@typeInfo(Header).@"struct".fields) |field| {
-            const field_size = @sizeOf(field.type);
-            @field(self, field.name) = std.mem.readInt(
-                field.type,
+        const s = @typeInfo(Header).@"struct";
+        inline for (s.field_types, s.field_names) |T, name| {
+            const field_size = @sizeOf(T);
+            @field(self, name) = std.mem.readInt(
+                T,
                 bytes_view[0..field_size],
                 .little,
             );
@@ -97,12 +98,13 @@ pub const Header = extern struct {
     pub fn serialize(self: *const Header, bytes_out: []u8) void {
         var bytes_view: []u8 = bytes_out[0..];
 
-        inline for (@typeInfo(Request.Header).@"struct".fields) |field| {
-            const field_size = @sizeOf(field.type);
+        const s = @typeInfo(Header).@"struct";
+        inline for (s.field_types, s.field_names) |T, name| {
+            const field_size = @sizeOf(T);
             std.mem.writeInt(
-                field.type,
+                T,
                 bytes_view[0..field_size],
-                @field(self, field.name),
+                @field(self, name),
                 .little,
             );
             bytes_view = bytes_view[field_size..];

@@ -512,7 +512,7 @@ const EpollCreate1Error = error{
 /// handling of errors and return values.
 ///
 /// Returns an `i32` value representing an fd.
-pub fn epoll_create1(flags: usize) EpollCreate1Error!i32 {
+pub fn epoll_create1(flags: u32) EpollCreate1Error!i32 {
     const ret: usize = linux.epoll_create1(flags);
     switch (linux.errno(ret)) {
         .SUCCESS => {
