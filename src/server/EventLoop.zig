@@ -247,8 +247,17 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
         }
         defer request.deinit(gpa);
 
+        // SAFETY: defined in the following if-statement
         var response: protocol.message.Response = undefined;
-        response.init(.ok, &.{.{ .str = "acknowledged" }});
+
+        const command: protocol.registry.Command = .decode(request.header.command_code);
+        if (command == .connection and command.connection == .echo) {
+            response.init(.ok, &.{request.body.data[0]});
+        } else if (command == .connection and command.connection == .ping) {
+            response.init(.ok, &.{.{ .str = "pong" }});
+        } else {
+            response.init(.err, &.{.{ .err = "unknown command" }});
+        }
 
         const response_bytes = gpa.alloc(u8, response.header.message_size) catch |err| {
             log.debug("response serliazing allocations failed, {}", .{err});
