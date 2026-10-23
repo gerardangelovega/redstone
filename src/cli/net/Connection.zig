@@ -268,6 +268,9 @@ pub fn receive_response(self: *Connection, gpa: Allocator) bool {
 
     for (response.body.data) |datum| {
         switch (datum) {
+            .nil => {
+                std.log.debug("(nil)", .{});
+            },
             .err => |val| {
                 std.log.debug("(err) {s}", .{val});
             },
@@ -280,7 +283,6 @@ pub fn receive_response(self: *Connection, gpa: Allocator) bool {
             .str => |val| {
                 std.log.debug("(str) {s}", .{val});
             },
-            else => {},
         }
     }
 

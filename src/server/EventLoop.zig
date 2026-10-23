@@ -252,7 +252,7 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
         // SAFETY: defined in the following if-statement
         var response: protocol.message.Response = undefined;
         const command: protocol.registry.Command = .decode(request.header.command_code);
-        if (!exectuors.dispatch(gpa, command, &request, &response)) {
+        if (!exectuors.dispatch(gpa, &self.store, command, &request, &response)) {
             client.state_desired = .close;
             break;
         }

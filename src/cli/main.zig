@@ -73,14 +73,6 @@ pub fn main(init: std.process.Init) void {
     if (!connection.receive_response(gpa)) return;
 
     // SAFETY: initialized by init()
-    var request_get: protocol.message.Request = undefined;
-    request_get.init(gpa, .{ .string = .get }, &.{.{ .str = "key" }}) catch return;
-    defer request_get.deinit(gpa);
-
-    if (!connection.send_request(gpa, &request_get)) return;
-    if (!connection.receive_response(gpa)) return;
-
-    // SAFETY: initialized by init()
     var request_set: protocol.message.Request = undefined;
     request_set.init(gpa, .{ .string = .set }, &.{
         .{ .str = "key" },
@@ -89,5 +81,13 @@ pub fn main(init: std.process.Init) void {
     defer request_set.deinit(gpa);
 
     if (!connection.send_request(gpa, &request_set)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_get: protocol.message.Request = undefined;
+    request_get.init(gpa, .{ .string = .get }, &.{.{ .str = "key" }}) catch return;
+    defer request_get.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_get)) return;
     if (!connection.receive_response(gpa)) return;
 }
