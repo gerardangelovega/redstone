@@ -6,7 +6,7 @@ const sys = @import("sys");
 const assert = @import("assert");
 const net = @import("net.zig");
 const protocol = @import("protocol");
-const handlers = @import("handlers.zig");
+const exectuors = @import("executors.zig");
 
 // aliases
 const Allocator = std.mem.Allocator;
@@ -47,19 +47,13 @@ pub fn init(self: *EventLoop, gpa: Allocator) void {
 
     self.epoll.init();
     if (!self.epoll.add(self.listener.socket, linux.EPOLL.IN)) {
-        log.err(
-            "init() failed: could not add listener socket to epoll interest list",
-            .{},
-        );
+        log.err("init() failed: could not add listener socket to epoll interest list", .{});
         std.process.exit(1);
     }
 
     self.clients = .empty;
     self.clients.appendNTimes(gpa, null, 4096) catch |err| {
-        log.err(
-            "init() failed, {}: could not allocate clients array list",
-            .{err},
-        );
+        log.err("init() failed, {}: could not allocate clients array list", .{err});
         std.process.exit(1);
     };
 
@@ -251,39 +245,12 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
         // SAFETY: defined in the following if-statement
         var response: protocol.message.Response = undefined;
 
-        // const command: protocol.registry.Command = .decode(request.header.command_code);
-        // if (command == .connection and command.connection == .echo) {
-        //     response.init(.ok, &.{request.body.data[0]});
-        // } else if (command == .connection and command.connection == .ping) {
-        //     response.init(.ok, &.{.{ .str = "pong" }});
-        // } else {
-        //     response.init(.err, &.{.{ .err = "unknown command" }});
-        // }
-
         const command: protocol.registry.Command = .decode(request.header.command_code);
-        switch (command) {
-            .connection => |connection| {
-                handlers.connection(gpa, connection, &request, &response) catch |err| {
-                    log.debug("response initialization failed, {}", .{err});
-                    client.state_desired = .close;
-                    return;
-                };
-            },
-            else => {
-                response.init(
-                    .err,
-                    gpa.dupe(
-                        protocol.message.Datum,
-                        &.{.{ .err = "unknown command" }},
-                    ) catch |err| {
-                        log.debug("response initialization failed, {}", .{err});
-                        client.state_desired = .close;
-                        return;
-                    },
-                );
-                response.init(.err, &.{.{ .err = "unknown command" }});
-            },
+        if (!exectuors.dispatch(gpa, command, &request, &response)) {
+            client.state_desired = .close;
+            break;
         }
+        defer response.deinit(gpa);
 
         const response_bytes = gpa.alloc(u8, response.header.message_size) catch |err| {
             log.debug("response serliazing allocations failed, {}", .{err});

@@ -26,40 +26,25 @@ pub fn connection(
 }
 
 fn invalid(gpa: std.mem.Allocator, _: *const Request, response_out: *Response) !void {
-    response_out.init(
-        .err,
-        try gpa.dupe(protocol.message.Datum, &.{.{ .err = "invalid command" }}),
-    );
+    try response_out.init(gpa, .err, &.{.{ .err = "invalid command" }});
 }
 
 fn ping(gpa: std.mem.Allocator, request_in: *const Request, response_out: *Response) !void {
     if (!Connection.arities.get(.ping).contains(request_in.header.data_count)) {
-        response_out.init(
-            .err,
-            try gpa.dupe(protocol.message.Datum, &.{.{ .err = "bad arguments" }}),
-        );
+        try response_out.init(gpa, .err, &.{.{ .err = "bad arguments" }});
         return;
     }
-    response_out.init(.ok, &.{.{ .str = "pong" }});
+    try response_out.init(gpa, .ok, &.{.{ .str = "pong" }});
 }
 
 fn echo(gpa: std.mem.Allocator, request_in: *const Request, response_out: *Response) !void {
     if (!Connection.arities.get(.echo).contains(request_in.header.data_count)) {
-        response_out.init(
-            .err,
-            try gpa.dupe(protocol.message.Datum, &.{.{ .err = "bad arguments" }}),
-        );
+        try response_out.init(gpa, .err, &.{.{ .err = "bad arguments" }});
         return;
     }
     if (request_in.body.data[0] != .str) {
-        response_out.init(
-            .err,
-            try gpa.dupe(protocol.message.Datum, &.{.{ .err = "bad type, expected string" }}),
-        );
+        try response_out.init(gpa, .err, &.{.{ .err = "bad type, expected string" }});
         return;
     }
-    response_out.init(
-        .err,
-        try gpa.dupe(protocol.message.Datum, &.{request_in.body.data[0]}),
-    );
+    try response_out.init(gpa, .err, &.{request_in.body.data[0]});
 }

@@ -9,8 +9,13 @@ header: Header,
 body: Body,
 
 // TODO: use Command instead of u16
-pub fn init(self: *Request, command: registry.Command, data: []const message.Datum) void {
-    self.body.data = data;
+pub fn init(
+    self: *Request,
+    allocator: std.mem.Allocator,
+    command: registry.Command,
+    data: []const message.Datum,
+) !void {
+    self.body.data = try allocator.dupe(message.Datum, data);
     self.body.size = 0;
     for (self.body.data) |datum| {
         self.body.size = self.body.size + datum.size();

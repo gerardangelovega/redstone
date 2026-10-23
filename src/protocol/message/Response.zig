@@ -8,8 +8,13 @@ const Response = @This();
 header: Header,
 body: Body,
 
-pub fn init(self: *Response, status: registry.Status, data: []const message.Datum) void {
-    self.body.data = data;
+pub fn init(
+    self: *Response,
+    allocator: std.mem.Allocator,
+    status: registry.Status,
+    data: []const message.Datum,
+) !void {
+    self.body.data = try allocator.dupe(message.Datum, data);
     self.body.size = 0;
     for (self.body.data) |datum| {
         self.body.size = self.body.size + datum.size();
