@@ -3,6 +3,7 @@ const std = @import("std");
 const sys = @import("sys");
 
 // file imports
+const Store = @import("Store.zig");
 const assert = @import("assert");
 const net = @import("net.zig");
 const protocol = @import("protocol");
@@ -27,7 +28,8 @@ const State = enum {
 
 listener: net.Listener,
 epoll: net.io.Epoll,
-clients: std.ArrayList(?*net.Client), // array map mapping fd as index to a net.Client
+// clients: std.ArrayList(?*net.Client), // array map mapping fd as index to a net.Client
+store: Store,
 state: State,
 
 /// Initializes an existing `EventLoop` instances along with its dependencies
@@ -37,7 +39,7 @@ pub fn init(self: *EventLoop, gpa: Allocator) void {
     self.* = .{
         .listener = undefined,
         .epoll = undefined,
-        .clients = undefined,
+        .store = undefined,
         .state = .uninitialized,
     };
 
@@ -51,11 +53,12 @@ pub fn init(self: *EventLoop, gpa: Allocator) void {
         std.process.exit(1);
     }
 
-    self.clients = .empty;
-    self.clients.appendNTimes(gpa, null, 4096) catch |err| {
-        log.err("init() failed, {}: could not allocate clients array list", .{err});
-        std.process.exit(1);
-    };
+    // self.clients = .empty;
+    // self.clients.appendNTimes(gpa, null, 4096) catch |err| {
+    //     log.err("init() failed, {}: could not allocate clients array list", .{err});
+    //     std.process.exit(1);
+    // };
+    self.store.init(gpa);
 
     self.state = .initialized;
     log.info("event loop and event loop dependencies initialized", .{});
@@ -70,12 +73,12 @@ pub fn deinit(self: *EventLoop, gpa: Allocator) void {
 
     self.listener.deinit();
     self.epoll.deinit();
-    for (self.clients.items) |c| {
+    for (self.store.clients.items) |c| {
         const client = c orelse continue;
         client.deinit(gpa);
         gpa.destroy(client);
     }
-    self.clients.deinit(gpa);
+    self.store.clients.deinit(gpa);
 
     self.state = .deinitialized;
     log.info("event loop and event loop dependencies deinitialized", .{});
@@ -119,9 +122,9 @@ fn accept_client(self: *EventLoop, gpa: Allocator, connection_fd: i32) void {
     assert.cheap(connection_fd >= 0);
 
     const client_index: usize = @intCast(connection_fd);
-    if (client_index >= self.clients.items.len) {
-        const count: usize = client_index - self.clients.items.len + 1;
-        self.clients.appendNTimes(gpa, null, count) catch |err| {
+    if (client_index >= self.store.clients.items.len) {
+        const count: usize = client_index - self.store.clients.items.len + 1;
+        self.store.clients.appendNTimes(gpa, null, count) catch |err| {
             log.err("grow clients memory failed, {}: fd={d}", .{ err, connection_fd });
             self.accept_client_rollback(gpa, connection_fd);
             return;
@@ -134,7 +137,7 @@ fn accept_client(self: *EventLoop, gpa: Allocator, connection_fd: i32) void {
         return;
     };
     client.init(connection_fd);
-    self.clients.items[client_index] = client;
+    self.store.clients.items[client_index] = client;
 
     if (!self.epoll.add(connection_fd, linux.EPOLL.IN)) {
         self.accept_client_rollback(gpa, connection_fd);
@@ -153,11 +156,11 @@ fn accept_client_rollback(self: *EventLoop, gpa: Allocator, client_fd: i32) void
 
     assert.cheap(self.state == .running);
     assert.cheap(client_fd >= 0);
-    assert.cheap(client_index < self.clients.items.len);
+    assert.cheap(client_index < self.store.clients.items.len);
 
     // rollback on Epoll.add() failure
-    if (self.clients.items[client_index]) |client| {
-        self.clients.items[client_index] = null;
+    if (self.store.clients.items[client_index]) |client| {
+        self.store.clients.items[client_index] = null;
         client.deinit(gpa);
         gpa.destroy(client);
         return;
@@ -171,7 +174,7 @@ fn accept_client_rollback(self: *EventLoop, gpa: Allocator, client_fd: i32) void
         },
     };
 
-    assert.cheap(self.clients.items[client_index] == null);
+    assert.cheap(self.store.clients.items[client_index] == null);
 }
 
 /// Perform `net.Client` operations depending on the intent and readiness of a `net.
@@ -181,7 +184,7 @@ fn handle_client(self: *EventLoop, gpa: Allocator, client_fd: i32, events: u32) 
     assert.cheap(client_fd >= 0);
 
     const client_index: usize = @intCast(client_fd);
-    const client: *net.Client = self.clients.items[client_index] orelse return;
+    const client: *net.Client = self.store.clients.items[client_index] orelse return;
 
     if ((events & linux.EPOLL.IN) != 0 and client.state_current == .receive) {
         self.handle_client_receive(gpa, client);
@@ -216,11 +219,13 @@ fn handle_client(self: *EventLoop, gpa: Allocator, client_fd: i32, events: u32) 
 fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) void {
     assert.cheap(self.state == .running);
 
+    // Peek/View Received Bytes
     const received = client.receive_requests(gpa);
 
     while (received) {
         const received_bytes: []const u8 = client.peek_received_bytes();
 
+        // Request Parsing
         // SAFETY: initialized by parse();
         var request: protocol.message.Request = undefined;
         const request_parse_result = request.parse(gpa, received_bytes) catch |err| {
@@ -229,6 +234,7 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
             break;
         };
 
+        // Request Validation
         switch (request_parse_result) {
             .incomplete => {
                 break;
@@ -242,9 +248,9 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
         }
         defer request.deinit(gpa);
 
+        // Command Dispatching & Execution and Response Generation
         // SAFETY: defined in the following if-statement
         var response: protocol.message.Response = undefined;
-
         const command: protocol.registry.Command = .decode(request.header.command_code);
         if (!exectuors.dispatch(gpa, command, &request, &response)) {
             client.state_desired = .close;
@@ -252,6 +258,7 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
         }
         defer response.deinit(gpa);
 
+        // Response Serialization
         const response_bytes = gpa.alloc(u8, response.header.message_size) catch |err| {
             log.debug("response serliazing allocations failed, {}", .{err});
             client.state_desired = .close;
@@ -259,11 +266,13 @@ fn handle_client_receive(self: *EventLoop, gpa: Allocator, client: *net.Client) 
         };
         response.serialize(response_bytes);
 
+        // Response Writing into Send Buffer
         if (!client.append_send_bytes(gpa, response_bytes)) {
             client.state_desired = .close;
             break;
         }
 
+        // Consume Received Bytes used in Request-Response
         client.consume_received_bytes(request.header.message_size);
     }
 
@@ -291,9 +300,9 @@ fn handle_client_close(self: *EventLoop, gpa: Allocator, client_fd: i32) void {
     assert.cheap(client_fd >= 0);
 
     const client_index: usize = @intCast(client_fd);
-    const client: *net.Client = self.clients.items[client_index] orelse return;
+    const client: *net.Client = self.store.clients.items[client_index] orelse return;
 
     client.deinit(gpa);
     gpa.destroy(client);
-    self.clients.items[client_index] = null;
+    self.store.clients.items[client_index] = null;
 }
