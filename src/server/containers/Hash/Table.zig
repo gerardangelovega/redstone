@@ -59,3 +59,9 @@ pub fn detach(self: *Table, parent: *?*Node) ?*Node {
 
     return node;
 }
+
+pub const empty: Table = .{
+    .slots = &.{},
+    .mask = 0,
+    .size = 0,
+};

@@ -2,6 +2,7 @@ const std = @import("std");
 
 const protocol = @import("protocol");
 
+const containers = @import("../containers.zig");
 const Store = @import("../Store.zig");
 const String = protocol.registry.Command.String;
 const Request = protocol.message.Request;
@@ -40,13 +41,21 @@ fn get(
     }
 
     const key = request_in.body.data[0].str;
-    const value = store.data.get(request_in.body.data[0].str);
-    if (value) |v| {
-        std.log.debug("key: {s}, value: {s}", .{ key, v });
-        try response_out.init(allocator, .ok, &.{.{ .str = v }});
-    } else {
-        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
-    }
+
+    var lookup_node: containers.Hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    const result_object = containers.Object.from(result_node.?);
+    const result_string = containers.Object.String.from(result_object);
+
+    const value = result_string.string;
+    // if (value) |v| {
+    std.log.debug("key: {s}, value: {s}", .{ key, value });
+    try response_out.init(allocator, .ok, &.{.{ .str = value }});
+    // } else {
+    //     try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    // }
 }
 
 fn set(
@@ -64,10 +73,23 @@ fn set(
         return;
     }
 
-    const key = try allocator.dupe(u8, request_in.body.data[0].str);
-    const value = try allocator.dupe(u8, request_in.body.data[1].str);
+    const key = request_in.body.data[0].str;
+    const value = request_in.body.data[1].str;
+
+    var object_string = try allocator.create(containers.Object.String);
+    try object_string.init(allocator, key, value);
+
     std.log.debug("set key: {s}, value: {s}", .{ key, value });
-    try store.data.put(key, value);
-    std.log.debug("from data: {s}", .{store.data.get(key).?});
+    try store.data.insert(allocator, &object_string.object.hash_node);
+
+    const result_node = store.data.lookup(allocator, &object_string.object.hash_node, eq);
+    const result_object = containers.Object.from(result_node.?);
+    const result_string = containers.Object.String.from(result_object);
+
+    std.log.debug("from data: {s}", .{result_string.string});
     try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+}
+
+fn eq(node_a: *containers.Hash.Node, node_b: *containers.Hash.Node) bool {
+    return node_a.hash == node_b.hash;
 }
