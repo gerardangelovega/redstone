@@ -90,4 +90,52 @@ pub fn main(init: std.process.Init) void {
 
     if (!connection.send_request(gpa, &request_get)) return;
     if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_push_front_a: protocol.message.Request = undefined;
+    request_push_front_a.init(
+        gpa,
+        .{ .list = .push_front },
+        &.{ .{ .str = "list_key" }, .{ .str = "list_value_a" } },
+    ) catch return;
+    defer request_push_front_a.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_push_front_a)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_push_front_b: protocol.message.Request = undefined;
+    request_push_front_b.init(
+        gpa,
+        .{ .list = .push_front },
+        &.{ .{ .str = "list_key" }, .{ .str = "list_value_b" } },
+    ) catch return;
+    defer request_push_front_b.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_push_front_b)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_push_back_a: protocol.message.Request = undefined;
+    request_push_back_a.init(
+        gpa,
+        .{ .list = .push_back },
+        &.{ .{ .str = "list_key" }, .{ .str = "list_value_a" } },
+    ) catch return;
+    defer request_push_back_a.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_push_back_a)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    // SAFETY: initialized by init()
+    var request_push_back_b: protocol.message.Request = undefined;
+    request_push_back_b.init(
+        gpa,
+        .{ .list = .push_back },
+        &.{ .{ .str = "list_key" }, .{ .str = "list_value_b" } },
+    ) catch return;
+    defer request_push_back_b.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_push_back_b)) return;
+    if (!connection.receive_response(gpa)) return;
 }

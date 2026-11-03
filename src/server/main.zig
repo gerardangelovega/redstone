@@ -1,10 +1,9 @@
 // standard library, library, and module imports
 const std = @import("std");
+const protocol = @import("protocol");
 
 // file imports
 const EventLoop = @import("EventLoop.zig");
-
-const protocol = @import("protocol");
 
 pub const std_options: std.Options = .{
     .log_level = .debug,

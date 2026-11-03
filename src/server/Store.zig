@@ -9,7 +9,7 @@ const Store = @This();
 
 clients: std.ArrayList(?*net.Client),
 // data: std.StringHashMap([]const u8),
-data: containers.Hash.Map,
+data: containers.hash.Map,
 
 pub fn init(self: *Store, allocator: std.mem.Allocator) void {
     // SAFETY: defined within the function

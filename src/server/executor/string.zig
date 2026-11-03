@@ -42,7 +42,7 @@ fn get(
 
     const key = request_in.body.data[0].str;
 
-    var lookup_node: containers.Hash.Node = undefined;
+    var lookup_node: containers.hash.Node = undefined;
     lookup_node.init(key);
 
     const result_node = store.data.lookup(allocator, &lookup_node, eq);
@@ -90,6 +90,6 @@ fn set(
     try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
 }
 
-fn eq(node_a: *containers.Hash.Node, node_b: *containers.Hash.Node) bool {
+fn eq(node_a: *containers.hash.Node, node_b: *containers.hash.Node) bool {
     return node_a.hash == node_b.hash;
 }

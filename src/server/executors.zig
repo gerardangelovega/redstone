@@ -4,6 +4,7 @@ const protocol = @import("protocol");
 const Store = @import("Store.zig");
 const connection = @import("executor/connection.zig").connection;
 const string = @import("executor/string.zig").string;
+const list = @import("executor/list.zig").list;
 
 const Command = protocol.registry.Command;
 const Request = protocol.message.Request;
@@ -28,6 +29,12 @@ pub fn dispatch(
         },
         .string => |s| {
             string(allocator, store, s, request_in, response_out) catch |err| {
+                log.debug("string response init failed, {}", .{err});
+                return false;
+            };
+        },
+        .list => |s| {
+            list(allocator, store, s, request_in, response_out) catch |err| {
                 log.debug("string response init failed, {}", .{err});
                 return false;
             };
