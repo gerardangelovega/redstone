@@ -62,6 +62,15 @@ pub fn pop_front(self: *List) ?*Node {
     return node;
 }
 
+pub fn front(self: *List) ?*Node {
+    if (self.size == 0) return null;
+
+    const node: *Node = self.head.next orelse return null;
+    if (node == self.tail) return null;
+
+    return node;
+}
+
 // TODO: should return true on success, false on fail
 pub fn push_back(self: *List, node: *Node) bool {
     assert.cheap(node.prev == null);
@@ -91,6 +100,15 @@ pub fn pop_back(self: *List) ?*Node {
     detach(prev, next, node);
 
     self.size = self.size - 1;
+
+    return node;
+}
+
+pub fn back(self: *List) ?*Node {
+    if (self.size == 0) return null;
+
+    const node: *Node = self.tail.prev orelse return null;
+    if (node == self.head) return null;
 
     return node;
 }

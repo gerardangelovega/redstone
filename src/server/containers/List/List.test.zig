@@ -118,6 +118,44 @@ test "pop front on non-empty list" {
     try std.testing.expect(list.size == 0);
 }
 
+test "get front with non-empty list" {
+    var list: *List = try std.testing.allocator.create(List);
+    defer std.testing.allocator.destroy(list);
+
+    try list.init(std.testing.allocator);
+    defer list.deinit(std.testing.allocator);
+
+    const node_a: *Node = try helper.create_node("node_a");
+    const node_b: *Node = try helper.create_node("node_b");
+    const node_c: *Node = try helper.create_node("node_c");
+
+    _ = list.push_front(node_a);
+    const result_a: ?*Node = list.front();
+    try std.testing.expect(result_a != null);
+    try std.testing.expect(result_a.? == node_a);
+
+    _ = list.push_back(node_b);
+    const result_b: ?*Node = list.front();
+    try std.testing.expect(result_b != null);
+    try std.testing.expect(result_b.? == node_a);
+
+    _ = list.push_front(node_c);
+    const result_c: ?*Node = list.front();
+    try std.testing.expect(result_c != null);
+    try std.testing.expect(result_c.? == node_c);
+}
+
+test "get front with empty list" {
+    var list: *List = try std.testing.allocator.create(List);
+    defer std.testing.allocator.destroy(list);
+
+    try list.init(std.testing.allocator);
+    defer list.deinit(std.testing.allocator);
+
+    const result_a: ?*Node = list.front();
+    try std.testing.expect(result_a == null);
+}
+
 test "push back with valid nodes" {
     var list: *List = try std.testing.allocator.create(List);
     defer std.testing.allocator.destroy(list);
@@ -192,6 +230,44 @@ test "pop back on non-empty list" {
     try std.testing.expect(list.head.next.? == list.tail);
     try std.testing.expect(list.tail.prev.? == list.head);
     try std.testing.expect(list.size == 0);
+}
+
+test "get back with non-empty list" {
+    var list: *List = try std.testing.allocator.create(List);
+    defer std.testing.allocator.destroy(list);
+
+    try list.init(std.testing.allocator);
+    defer list.deinit(std.testing.allocator);
+
+    const node_a: *Node = try helper.create_node("node_a");
+    const node_b: *Node = try helper.create_node("node_b");
+    const node_c: *Node = try helper.create_node("node_c");
+
+    _ = list.push_front(node_a);
+    const result_a: ?*Node = list.back();
+    try std.testing.expect(result_a != null);
+    try std.testing.expect(result_a.? == node_a);
+
+    _ = list.push_back(node_b);
+    const result_b: ?*Node = list.back();
+    try std.testing.expect(result_b != null);
+    try std.testing.expect(result_b.? == node_b);
+
+    _ = list.push_front(node_c);
+    const result_c: ?*Node = list.back();
+    try std.testing.expect(result_c != null);
+    try std.testing.expect(result_c.? == node_b);
+}
+
+test "get back with empty list" {
+    var list: *List = try std.testing.allocator.create(List);
+    defer std.testing.allocator.destroy(list);
+
+    try list.init(std.testing.allocator);
+    defer list.deinit(std.testing.allocator);
+
+    const result_a: ?*Node = list.back();
+    try std.testing.expect(result_a == null);
 }
 
 test "insert after on valid index" {
