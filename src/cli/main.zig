@@ -215,4 +215,70 @@ pub fn main(init: std.process.Init) void {
 
     if (!connection.send_request(gpa, &request_insert_after)) return;
     if (!connection.receive_response(gpa)) return;
+
+    var request_update_0: protocol.message.Request = undefined;
+    request_update_0.init(
+        gpa,
+        .{ .list = .update },
+        &.{ .{ .str = "list_key" }, .{ .int = 0 }, .{ .str = "list_value_aa" } },
+    ) catch return;
+    defer request_update_0.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_update_0)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_index_0: protocol.message.Request = undefined;
+    request_index_0.init(
+        gpa,
+        .{ .list = .index },
+        &.{ .{ .str = "list_key" }, .{ .int = 0 } },
+    ) catch return;
+    defer request_index_0.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_index_0)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_index_1: protocol.message.Request = undefined;
+    request_index_1.init(
+        gpa,
+        .{ .list = .index },
+        &.{ .{ .str = "list_key" }, .{ .int = 1 } },
+    ) catch return;
+    defer request_index_1.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_index_1)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_index_2: protocol.message.Request = undefined;
+    request_index_2.init(
+        gpa,
+        .{ .list = .index },
+        &.{ .{ .str = "list_key" }, .{ .int = 2 } },
+    ) catch return;
+    defer request_index_2.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_index_2)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_index_3: protocol.message.Request = undefined;
+    request_index_3.init(
+        gpa,
+        .{ .list = .index },
+        &.{ .{ .str = "list_key" }, .{ .int = 3 } },
+    ) catch return;
+    defer request_index_3.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_index_3)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_remove_2: protocol.message.Request = undefined;
+    request_remove_2.init(
+        gpa,
+        .{ .list = .remove },
+        &.{ .{ .str = "list_key" }, .{ .int = 2 } },
+    ) catch return;
+    defer request_remove_2.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_remove_2)) return;
+    if (!connection.receive_response(gpa)) return;
 }

@@ -8,6 +8,11 @@ const List = protocol.registry.Command.List;
 const Request = protocol.message.Request;
 const Response = protocol.message.Response;
 
+// TODO: figure out if there are potential leaks and fix them
+// TODO: handle deletion of nodes in pop_front
+// TODO: handle deletion of nodes in pop_back
+// TODO: handle deletion of nodes in remove
+
 pub fn list(
     allocator: std.mem.Allocator,
     store: *Store,
@@ -40,15 +45,15 @@ pub fn list(
         .insert_after => {
             try insert_after(allocator, store, request_in, response_out);
         },
-        // .index => {
-        //     try index(allocator, store, request_in, response_out);
-        // },
-        // .update => {
-        //     try update(allocator, store, request_in, response_out);
-        // },
-        // .remove => {
-        //     try remove(allocator, store, request_in, response_out);
-        // },
+        .index => {
+            try index(allocator, store, request_in, response_out);
+        },
+        .update => {
+            try update(allocator, store, request_in, response_out);
+        },
+        .remove => {
+            try remove(allocator, store, request_in, response_out);
+        },
         .length => {
             try length(allocator, store, request_in, response_out);
         },
@@ -247,7 +252,7 @@ fn insert_before(
     response_out: *Response,
 ) !void {
     const key = request_in.body.data[0].str;
-    const index: u32 = @intCast(request_in.body.data[1].int);
+    const idx: u32 = @intCast(request_in.body.data[1].int);
     const value = request_in.body.data[2].str;
 
     var lookup_node: containers.hash.Node = undefined;
@@ -264,7 +269,7 @@ fn insert_before(
     const list_node: *containers.list.Node = try allocator.create(containers.list.Node);
     try list_node.init(allocator, value);
 
-    const insert_result = result_list.list.insert_before(index, list_node);
+    const insert_result = result_list.list.insert_before(idx, list_node);
     if (insert_result) {
         try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
     } else {
@@ -280,7 +285,7 @@ fn insert_after(
     response_out: *Response,
 ) !void {
     const key = request_in.body.data[0].str;
-    const index: u32 = @intCast(request_in.body.data[1].int);
+    const idx: u32 = @intCast(request_in.body.data[1].int);
     const value = request_in.body.data[2].str;
 
     var lookup_node: containers.hash.Node = undefined;
@@ -297,7 +302,7 @@ fn insert_after(
     const list_node: *containers.list.Node = try allocator.create(containers.list.Node);
     try list_node.init(allocator, value);
 
-    const insert_result = result_list.list.insert_after(index, list_node);
+    const insert_result = result_list.list.insert_after(idx, list_node);
     if (insert_result) {
         try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
     } else {
@@ -305,28 +310,95 @@ fn insert_after(
     }
     print_list(&result_list.list);
 }
-//
-// fn index(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
-//
-// fn update(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
-//
-// fn remove(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
-//
+
+fn index(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+    const idx: u32 = @intCast(request_in.body.data[1].int);
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const list_node: ?*containers.list.Node = result_list.list.lookup(idx);
+
+    if (list_node != null) {
+        try response_out.init(allocator, .ok, &.{.{ .str = list_node.?.value }});
+    } else {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    }
+}
+
+fn update(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+    const idx: u32 = @intCast(request_in.body.data[1].int);
+    const value = request_in.body.data[2].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const update_result: bool = try result_list.list.update(allocator, idx, value);
+
+    if (update_result) {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    } else {
+        try response_out.init(allocator, .err, &.{.{ .err = "update failed" }});
+    }
+    print_list(&result_list.list);
+}
+
+fn remove(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+    const idx: u32 = @intCast(request_in.body.data[1].int);
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const removed_node: ?*containers.list.Node = result_list.list.remove(idx);
+
+    if (removed_node != null) {
+        try response_out.init(allocator, .ok, &.{.{ .str = removed_node.?.value }});
+    } else {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    }
+    print_list(&result_list.list);
+}
+
 fn length(
     allocator: std.mem.Allocator,
     store: *Store,

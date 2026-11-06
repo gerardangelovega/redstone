@@ -140,10 +140,10 @@ pub const Command = union(enum) {
         back          = 805,
         insert_before = 806,
         insert_after  = 807,
-        // index         = 806,
-        // update        = 807,
-        // remove        = 808,
-        length        = 809,
+        index         = 808,
+        update        = 809,
+        remove        = 810,
+        length        = 811,
 
         pub const min: u16 = 800;
         pub const max: u16 = 999;
@@ -157,9 +157,9 @@ pub const Command = union(enum) {
             .back     = .{ .min = 1, .max = 1 },
             .insert_before = .{ .min = 3, .max = 3 },
             .insert_after  = .{ .min = 3, .max = 3 },
-            // .index         = .{ .min = 2, .max = 2 },
-            // .update        = .{ .min = 2, .max = 2 },
-            // .remove        = .{ .min = 2, .max = 2 },
+            .index         = .{ .min = 2, .max = 2 },
+            .update        = .{ .min = 2, .max = 2 },
+            .remove        = .{ .min = 2, .max = 2 },
             .length        = .{ .min = 1, .max = 1 },
         });
     };
