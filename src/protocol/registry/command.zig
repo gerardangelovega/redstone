@@ -132,10 +132,12 @@ pub const Command = union(enum) {
     };
 
     pub const List = enum(u16) {
-        push_front    = 800,
-        push_back     = 801,
-        // pop_front     = 802,
-        // pop_back      = 803,
+        push_front = 800,
+        push_back  = 801,
+        // pop_front  = 802,
+        // pop_back   = 803,
+        front      = 804,
+        back       = 805,
         // insert_before = 804,
         // insert_after  = 805,
         // index         = 806,
@@ -151,6 +153,8 @@ pub const Command = union(enum) {
             .push_back     = .{ .min = 2, .max = 2 },
             // .pop_front     = .{ .min = 1, .max = 1 },
             // .pop_back      = .{ .min = 1, .max = 1 },
+            .front    = .{ .min = 1, .max = 1 },
+            .back     = .{ .min = 1, .max = 1 },
             // .insert_before = .{ .min = 3, .max = 3 },
             // .insert_after  = .{ .min = 3, .max = 3 },
             // .index         = .{ .min = 2, .max = 2 },

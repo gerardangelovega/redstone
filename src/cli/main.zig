@@ -116,26 +116,48 @@ pub fn main(init: std.process.Init) void {
     if (!connection.receive_response(gpa)) return;
 
     // SAFETY: initialized by init()
-    var request_push_back_a: protocol.message.Request = undefined;
-    request_push_back_a.init(
+    var request_push_back_c: protocol.message.Request = undefined;
+    request_push_back_c.init(
         gpa,
         .{ .list = .push_back },
-        &.{ .{ .str = "list_key" }, .{ .str = "list_value_a" } },
+        &.{ .{ .str = "list_key" }, .{ .str = "list_value_c" } },
     ) catch return;
-    defer request_push_back_a.deinit(gpa);
+    defer request_push_back_c.deinit(gpa);
 
-    if (!connection.send_request(gpa, &request_push_back_a)) return;
+    if (!connection.send_request(gpa, &request_push_back_c)) return;
     if (!connection.receive_response(gpa)) return;
 
     // SAFETY: initialized by init()
-    var request_push_back_b: protocol.message.Request = undefined;
-    request_push_back_b.init(
+    var request_push_back_d: protocol.message.Request = undefined;
+    request_push_back_d.init(
         gpa,
         .{ .list = .push_back },
-        &.{ .{ .str = "list_key" }, .{ .str = "list_value_b" } },
+        &.{ .{ .str = "list_key" }, .{ .str = "list_value_d" } },
     ) catch return;
-    defer request_push_back_b.deinit(gpa);
+    defer request_push_back_d.deinit(gpa);
 
-    if (!connection.send_request(gpa, &request_push_back_b)) return;
+    if (!connection.send_request(gpa, &request_push_back_d)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_front: protocol.message.Request = undefined;
+    request_front.init(
+        gpa,
+        .{ .list = .front },
+        &.{.{ .str = "list_key" }},
+    ) catch return;
+    defer request_front.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_front)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_back: protocol.message.Request = undefined;
+    request_back.init(
+        gpa,
+        .{ .list = .back },
+        &.{.{ .str = "list_key" }},
+    ) catch return;
+    defer request_back.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_back)) return;
     if (!connection.receive_response(gpa)) return;
 }

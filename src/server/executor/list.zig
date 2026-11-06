@@ -28,6 +28,12 @@ pub fn list(
         // .pop_back => {
         //     try pop_back(allocator, store, request_in, response_out);
         // },
+        .front => {
+            try front(allocator, store, request_in, response_out);
+        },
+        .back => {
+            try back(allocator, store, request_in, response_out);
+        },
         // .insert_before => {
         //     try insert_before(allocator, store, request_in, response_out);
         // },
@@ -131,6 +137,62 @@ fn push_back(
 //     request_in: *const Request,
 //     response_out: *Response,
 // ) !void {}
+
+fn front(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const list_node: ?*containers.list.Node = result_list.list.front();
+
+    if (list_node != null) {
+        try response_out.init(allocator, .ok, &.{.{ .str = list_node.?.value }});
+    } else {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    }
+}
+
+fn back(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const list_node: ?*containers.list.Node = result_list.list.back();
+
+    if (list_node != null) {
+        try response_out.init(allocator, .ok, &.{.{ .str = list_node.?.value }});
+    } else {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    }
+}
 
 // fn insert_before(
 //     allocator: std.mem.Allocator,
