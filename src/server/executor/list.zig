@@ -34,12 +34,12 @@ pub fn list(
         .back => {
             try back(allocator, store, request_in, response_out);
         },
-        // .insert_before => {
-        //     try insert_before(allocator, store, request_in, response_out);
-        // },
-        // .insert_after => {
-        //     try insert_after(allocator, store, request_in, response_out);
-        // },
+        .insert_before => {
+            try insert_before(allocator, store, request_in, response_out);
+        },
+        .insert_after => {
+            try insert_after(allocator, store, request_in, response_out);
+        },
         // .index => {
         //     try index(allocator, store, request_in, response_out);
         // },
@@ -240,19 +240,71 @@ fn back(
     }
 }
 
-// fn insert_before(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
-//
-// fn insert_after(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
+fn insert_before(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+    const index: u32 = @intCast(request_in.body.data[1].int);
+    const value = request_in.body.data[2].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+
+    const list_node: *containers.list.Node = try allocator.create(containers.list.Node);
+    try list_node.init(allocator, value);
+
+    const insert_result = result_list.list.insert_before(index, list_node);
+    if (insert_result) {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    } else {
+        try response_out.init(allocator, .err, &.{.{ .err = "insert before failed" }});
+    }
+    print_list(&result_list.list);
+}
+
+fn insert_after(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+    const index: u32 = @intCast(request_in.body.data[1].int);
+    const value = request_in.body.data[2].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+
+    const list_node: *containers.list.Node = try allocator.create(containers.list.Node);
+    try list_node.init(allocator, value);
+
+    const insert_result = result_list.list.insert_after(index, list_node);
+    if (insert_result) {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    } else {
+        try response_out.init(allocator, .err, &.{.{ .err = "insert after failed" }});
+    }
+    print_list(&result_list.list);
+}
 //
 // fn index(
 //     allocator: std.mem.Allocator,

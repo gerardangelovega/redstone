@@ -193,4 +193,26 @@ pub fn main(init: std.process.Init) void {
 
     if (!connection.send_request(gpa, &request_length)) return;
     if (!connection.receive_response(gpa)) return;
+
+    var request_insert_before: protocol.message.Request = undefined;
+    request_insert_before.init(
+        gpa,
+        .{ .list = .insert_before },
+        &.{ .{ .str = "list_key" }, .{ .int = 1 }, .{ .str = "list_value_b" } },
+    ) catch return;
+    defer request_insert_before.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_insert_before)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_insert_after: protocol.message.Request = undefined;
+    request_insert_after.init(
+        gpa,
+        .{ .list = .insert_after },
+        &.{ .{ .str = "list_key" }, .{ .int = 2 }, .{ .str = "list_value_d" } },
+    ) catch return;
+    defer request_insert_after.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_insert_after)) return;
+    if (!connection.receive_response(gpa)) return;
 }
