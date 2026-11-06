@@ -160,4 +160,37 @@ pub fn main(init: std.process.Init) void {
 
     if (!connection.send_request(gpa, &request_back)) return;
     if (!connection.receive_response(gpa)) return;
+
+    var request_pop_front: protocol.message.Request = undefined;
+    request_pop_front.init(
+        gpa,
+        .{ .list = .pop_front },
+        &.{.{ .str = "list_key" }},
+    ) catch return;
+    defer request_pop_front.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_pop_front)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_pop_back: protocol.message.Request = undefined;
+    request_pop_back.init(
+        gpa,
+        .{ .list = .pop_back },
+        &.{.{ .str = "list_key" }},
+    ) catch return;
+    defer request_pop_back.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_pop_back)) return;
+    if (!connection.receive_response(gpa)) return;
+
+    var request_length: protocol.message.Request = undefined;
+    request_length.init(
+        gpa,
+        .{ .list = .length },
+        &.{.{ .str = "list_key" }},
+    ) catch return;
+    defer request_length.deinit(gpa);
+
+    if (!connection.send_request(gpa, &request_length)) return;
+    if (!connection.receive_response(gpa)) return;
 }

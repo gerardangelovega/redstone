@@ -134,8 +134,8 @@ pub const Command = union(enum) {
     pub const List = enum(u16) {
         push_front = 800,
         push_back  = 801,
-        // pop_front  = 802,
-        // pop_back   = 803,
+        pop_front  = 802,
+        pop_back   = 803,
         front      = 804,
         back       = 805,
         // insert_before = 804,
@@ -143,7 +143,7 @@ pub const Command = union(enum) {
         // index         = 806,
         // update        = 807,
         // remove        = 808,
-        // length        = 809,
+        length        = 809,
 
         pub const min: u16 = 800;
         pub const max: u16 = 999;
@@ -151,8 +151,8 @@ pub const Command = union(enum) {
         pub const arities: std.EnumArray(@This(), Arity) = .init(.{
             .push_front    = .{ .min = 2, .max = 2 },
             .push_back     = .{ .min = 2, .max = 2 },
-            // .pop_front     = .{ .min = 1, .max = 1 },
-            // .pop_back      = .{ .min = 1, .max = 1 },
+            .pop_front     = .{ .min = 1, .max = 1 },
+            .pop_back      = .{ .min = 1, .max = 1 },
             .front    = .{ .min = 1, .max = 1 },
             .back     = .{ .min = 1, .max = 1 },
             // .insert_before = .{ .min = 3, .max = 3 },
@@ -160,7 +160,7 @@ pub const Command = union(enum) {
             // .index         = .{ .min = 2, .max = 2 },
             // .update        = .{ .min = 2, .max = 2 },
             // .remove        = .{ .min = 2, .max = 2 },
-            // .length        = .{ .min = 1, .max = 1 },
+            .length        = .{ .min = 1, .max = 1 },
         });
     };
     // zig fmt: on

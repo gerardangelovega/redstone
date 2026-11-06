@@ -22,12 +22,12 @@ pub fn list(
         .push_back => {
             try push_back(allocator, store, request_in, response_out);
         },
-        // .pop_front => {
-        //     try pop_front(allocator, store, request_in, response_out);
-        // },
-        // .pop_back => {
-        //     try pop_back(allocator, store, request_in, response_out);
-        // },
+        .pop_front => {
+            try pop_front(allocator, store, request_in, response_out);
+        },
+        .pop_back => {
+            try pop_back(allocator, store, request_in, response_out);
+        },
         .front => {
             try front(allocator, store, request_in, response_out);
         },
@@ -49,9 +49,9 @@ pub fn list(
         // .remove => {
         //     try remove(allocator, store, request_in, response_out);
         // },
-        // .length => {
-        //     try length(allocator, store, request_in, response_out);
-        // },
+        .length => {
+            try length(allocator, store, request_in, response_out);
+        },
     }
 }
 
@@ -124,19 +124,65 @@ fn push_back(
     try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
 }
 
-// fn pop_front(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
-//
-// fn pop_back(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
+fn pop_front(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const list_node: ?*containers.list.Node = result_list.list.pop_front();
+
+    if (list_node != null) {
+        try response_out.init(allocator, .ok, &.{.{ .str = list_node.?.value }});
+    } else {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    }
+
+    print_list(&result_list.list);
+}
+
+fn pop_back(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+    const list_node: ?*containers.list.Node = result_list.list.pop_back();
+
+    if (list_node != null) {
+        try response_out.init(allocator, .ok, &.{.{ .str = list_node.?.value }});
+    } else {
+        try response_out.init(allocator, .ok, &.{.{ .nil = {} }});
+    }
+
+    print_list(&result_list.list);
+}
 
 fn front(
     allocator: std.mem.Allocator,
@@ -229,12 +275,28 @@ fn back(
 //     response_out: *Response,
 // ) !void {}
 //
-// fn length(
-//     allocator: std.mem.Allocator,
-//     store: *Store,
-//     request_in: *const Request,
-//     response_out: *Response,
-// ) !void {}
+fn length(
+    allocator: std.mem.Allocator,
+    store: *Store,
+    request_in: *const Request,
+    response_out: *Response,
+) !void {
+    const key = request_in.body.data[0].str;
+
+    var lookup_node: containers.hash.Node = undefined;
+    lookup_node.init(key);
+
+    const result_node = store.data.lookup(allocator, &lookup_node, eq);
+    if (result_node == null) {
+        try response_out.init(allocator, .err, &.{.{ .err = "key not found" }});
+        return;
+    }
+
+    const result_object: *containers.Object = .from(result_node.?);
+    const result_list: *containers.Object.List = .from(result_object);
+
+    try response_out.init(allocator, .ok, &.{.{ .int = result_list.list.size }});
+}
 
 fn eq(node_a: *containers.hash.Node, node_b: *containers.hash.Node) bool {
     return node_a.hash == node_b.hash;
